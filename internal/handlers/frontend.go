@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -34,6 +35,10 @@ func (h *Handler) HandleFrontend(w http.ResponseWriter, r *http.Request) {
 
 	// 2. Check if Next.js dev server is running on port 20127
 	if isPortOpen("127.0.0.1", 20127) {
+		if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+			proxyWebSocket(w, r, "127.0.0.1:20127")
+			return
+		}
 		target, _ := url.Parse("http://127.0.0.1:20127")
 		proxy := httputil.NewSingleHostReverseProxy(target)
 		proxy.ServeHTTP(w, r)
@@ -42,6 +47,41 @@ func (h *Handler) HandleFrontend(w http.ResponseWriter, r *http.Request) {
 
 	// 3. Fallback: Modern, rich dark-mode built-in Web Dashboard
 	serveEmbeddedDashboard(w, r, h.Cfg.Port)
+}
+
+func proxyWebSocket(w http.ResponseWriter, r *http.Request, targetAddr string) {
+	hj, ok := w.(http.Hijacker)
+	if !ok {
+		http.Error(w, "server does not support hijacking", http.StatusInternalServerError)
+		return
+	}
+	clientConn, _, err := hj.Hijack()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer clientConn.Close()
+
+	upstreamConn, err := net.Dial("tcp", targetAddr)
+	if err != nil {
+		return
+	}
+	defer upstreamConn.Close()
+
+	if err := r.Write(upstreamConn); err != nil {
+		return
+	}
+
+	errc := make(chan error, 2)
+	go func() {
+		_, err := io.Copy(upstreamConn, clientConn)
+		errc <- err
+	}()
+	go func() {
+		_, err := io.Copy(clientConn, upstreamConn)
+		errc <- err
+	}()
+	<-errc
 }
 
 func isPortOpen(host string, port int) bool {
