@@ -159,7 +159,7 @@ Options:
 	if !dontOpenBrowser {
 		go func() {
 			if cli.WaitServerReady(portNum, 5*time.Second) {
-				url := fmt.Sprintf("http://%s:%d/dashboard", displayHost, portNum)
+				url := fmt.Sprintf("http://%s:%d/endpoint", displayHost, portNum)
 				_ = cli.OpenBrowser(url)
 			}
 		}()

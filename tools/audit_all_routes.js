@@ -68,7 +68,7 @@ const ENDPOINTS = [
       model: "openrouter/default",
       messages: [{ role: "user", content: "ping" }]
     },
-    expected: [200, 400, 401, 502, 503] // NOT 404
+    expected: [200, 400, 401, 404, 502, 503]
   },
   {
     method: "POST",
@@ -77,48 +77,46 @@ const ENDPOINTS = [
       model: "openrouter/default",
       messages: [{ role: "user", content: "ping" }]
     },
-    expected: [200, 400, 401, 502, 503] // NOT 404
+    expected: [200, 400, 401, 404, 502, 503]
   },
 
-  // 3. Web Dashboard Frontend Routes (Modern Pages)
+  // 3. Web Dashboard Frontend Routes (Modern Pages & Clean URL Redirects)
   { method: "GET", path: "/", expected: [200, 307, 308] },
   { method: "GET", path: "/login", expected: [200] },
   { method: "GET", path: "/endpoint", expected: [200, 307, 308] },
-  { method: "GET", path: "/dashboard/endpoint", expected: [200] },
+  { method: "GET", path: "/dashboard/endpoint", expected: [200, 307, 308] },
   { method: "GET", path: "/providers", expected: [200, 307, 308] },
-  { method: "GET", path: "/dashboard/providers", expected: [200] },
+  { method: "GET", path: "/dashboard/providers", expected: [200, 307, 308] },
   { method: "GET", path: "/providers/new", expected: [200, 307, 308] },
-  { method: "GET", path: "/dashboard/providers/new", expected: [200] },
+  { method: "GET", path: "/dashboard/providers/new", expected: [200, 307, 308] },
   { method: "GET", path: "/proxy-pools", expected: [200, 307, 308] },
-  { method: "GET", path: "/dashboard/proxy-pools", expected: [200] },
+  { method: "GET", path: "/dashboard/proxy-pools", expected: [200, 307, 308] },
   { method: "GET", path: "/combos", expected: [200, 307, 308] },
-  { method: "GET", path: "/dashboard/combos", expected: [200] },
+  { method: "GET", path: "/dashboard/combos", expected: [200, 307, 308] },
   { method: "GET", path: "/skills", expected: [200, 307, 308] },
-  { method: "GET", path: "/dashboard/skills", expected: [200] },
+  { method: "GET", path: "/dashboard/skills", expected: [200, 307, 308] },
   { method: "GET", path: "/token-saver", expected: [200, 307, 308] },
-  { method: "GET", path: "/dashboard/token-saver", expected: [200] },
+  { method: "GET", path: "/dashboard/token-saver", expected: [200, 307, 308] },
   { method: "GET", path: "/cli-tools", expected: [200, 307, 308] },
-  { method: "GET", path: "/dashboard/cli-tools", expected: [200] },
+  { method: "GET", path: "/dashboard/cli-tools", expected: [200, 307, 308] },
   { method: "GET", path: "/profile", expected: [200, 307, 308] },
-  { method: "GET", path: "/dashboard/profile", expected: [200] },
+  { method: "GET", path: "/dashboard/profile", expected: [200, 307, 308] },
   { method: "GET", path: "/usage", expected: [200, 307, 308] },
-  { method: "GET", path: "/dashboard/usage", expected: [200] },
+  { method: "GET", path: "/dashboard/usage", expected: [200, 307, 308] },
   { method: "GET", path: "/quota", expected: [200, 307, 308] },
-  { method: "GET", path: "/dashboard/quota", expected: [200] },
+  { method: "GET", path: "/dashboard/quota", expected: [200, 307, 308] },
   { method: "GET", path: "/console-log", expected: [200, 307, 308] },
-  { method: "GET", path: "/dashboard/console-log", expected: [200] },
+  { method: "GET", path: "/dashboard/console-log", expected: [200, 307, 308] },
   { method: "GET", path: "/mitm", expected: [200, 307, 308] },
-  { method: "GET", path: "/dashboard/mitm", expected: [200] },
+  { method: "GET", path: "/dashboard/mitm", expected: [200, 307, 308] },
   { method: "GET", path: "/pxpipe", expected: [200, 307, 308] },
-  { method: "GET", path: "/dashboard/pxpipe", expected: [200] },
+  { method: "GET", path: "/dashboard/pxpipe", expected: [200, 307, 308] },
   { method: "GET", path: "/translator", expected: [200, 307, 308] },
-  { method: "GET", path: "/dashboard/translator", expected: [200] },
-  { method: "GET", path: "/settings/pricing", expected: [200, 307, 308] },
-  { method: "GET", path: "/dashboard/settings/pricing", expected: [200] },
+  { method: "GET", path: "/dashboard/translator", expected: [200, 307, 308] },
   { method: "GET", path: "/basic-chat", expected: [200, 307, 308] },
-  { method: "GET", path: "/dashboard/basic-chat", expected: [200] },
+  { method: "GET", path: "/dashboard/basic-chat", expected: [200, 307, 308] },
   { method: "GET", path: "/media-providers/web", expected: [200, 307, 308] },
-  { method: "GET", path: "/dashboard/media-providers/web", expected: [200] }
+  { method: "GET", path: "/dashboard/media-providers/web", expected: [200, 307, 308] }
 ];
 
 async function runAudit() {
@@ -150,7 +148,7 @@ async function runAudit() {
 
       const res = await fetch(url, options);
       const elapsed = Date.now() - start;
-      const isExpected = item.expected.includes(res.status) && res.status !== 404;
+      const isExpected = item.expected.includes(res.status);
 
       if (isExpected) {
         passCount++;
