@@ -13,6 +13,7 @@ import (
 	"github.com/dresar/go-9router/internal/providers/adapters"
 	"github.com/dresar/go-9router/internal/storage/repos"
 	"github.com/dresar/go-9router/internal/stream"
+	"github.com/dresar/go-9router/internal/tokensaver"
 )
 
 func (h *Handler) HandleChat(w http.ResponseWriter, r *http.Request) {
@@ -32,6 +33,10 @@ func (h *Handler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	settings, _ := repos.GetSettings(h.DB)
+	if strings.ToLower(r.Header.Get("x-9router-token-saver")) != "off" {
+		tokensaver.ApplyTokenSaver(body, settings)
+	}
+
 	requireKey := repos.SettingBool(settings, "requireApiKey", h.Cfg.RequireAPIKey)
 	if requireKey {
 		apiKey := extractAPIKey(r)

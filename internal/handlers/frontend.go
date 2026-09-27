@@ -304,3 +304,18 @@ func serveEmbeddedDashboard(w http.ResponseWriter, r *http.Request, port string)
 </html>`, port, port, port)
 	w.Write([]byte(html))
 }
+
+func (h *Handler) HandleMCPProxy(w http.ResponseWriter, r *http.Request) {
+	if isPortOpen("127.0.0.1", 20127) {
+		if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+			proxyWebSocket(w, r, "127.0.0.1:20127")
+			return
+		}
+		target, _ := url.Parse("http://127.0.0.1:20127")
+		proxy := httputil.NewSingleHostReverseProxy(target)
+		proxy.ServeHTTP(w, r)
+		return
+	}
+	h.JSONError(w, http.StatusServiceUnavailable, "Next.js backend with MCP stdio bridge is not running on port 20127")
+}
+
