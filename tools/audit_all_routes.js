@@ -115,6 +115,8 @@ const ENDPOINTS = [
   { method: "GET", path: "/dashboard/translator", expected: [200, 307, 308] },
   { method: "GET", path: "/basic-chat", expected: [200, 307, 308] },
   { method: "GET", path: "/dashboard/basic-chat", expected: [200, 307, 308] },
+  { method: "GET", path: "/playground", expected: [200, 307, 308] },
+  { method: "GET", path: "/dashboard/playground", expected: [200, 307, 308] },
   { method: "GET", path: "/media-providers/web", expected: [200, 307, 308] },
   { method: "GET", path: "/dashboard/media-providers/web", expected: [200, 307, 308] }
 ];

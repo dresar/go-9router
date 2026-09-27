@@ -20,7 +20,7 @@ const COMBINED_WEB_ITEM = { id: "web", label: "Web Fetch & Search", icon: "trave
 const navItems = [
   { href: "/endpoint", label: "Endpoint & Key", icon: "api" },
   { href: "/providers", label: "Providers", icon: "dns" },
-  // { href: "/basic-chat", label: "Basic Chat", icon: "chat" }, // Hidden
+  { href: "/playground", label: "Playground", icon: "science" },
   { href: "/combos", label: "Combo & Vision Adapter", icon: "layers" },
   { href: "/usage", label: "Usage", icon: "bar_chart" },
   { href: "/quota", label: "Quota Tracker", icon: "data_usage" },

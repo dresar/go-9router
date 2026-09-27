@@ -208,6 +208,14 @@ const nextConfig = {
         destination: "/dashboard/basic-chat"
       },
       {
+        source: "/playground",
+        destination: "/dashboard/playground"
+      },
+      {
+        source: "/playground/:path*",
+        destination: "/dashboard/playground/:path*"
+      },
+      {
         source: "/mitm",
         destination: "/dashboard/mitm"
       },
