@@ -6,11 +6,21 @@ bin/
 *.dylib
 
 # Data & Runtime
+data/
 *.pid
 *.sqlite*
 testdata/*.sqlite*
 test_run.log
 *.log
+
+# Sensitive Credentials & Backups
+*backup*.json
+*.backup.json
+9router-backup*.json
+.env
+.env.*
+!.env.example
+jwt-secret
 
 # Frontend
 frontend/node_modules/
