@@ -83,7 +83,16 @@ func UpdateNode(db *sql.DB, id string, updates map[string]any) (*ProviderNode, e
 			data[k] = v
 		}
 	}
-	updated := dataToNode(id, n.Type, n.Name, data, n.CreatedAt)
+	nType := n.Type
+	if v, ok := updates["type"].(string); ok && v != "" {
+		nType = v
+	}
+	name := n.Name
+	if v, ok := updates["name"].(string); ok {
+		name = v
+	}
+
+	updated := dataToNode(id, nType, name, data, n.CreatedAt)
 	updated.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	b, _ := json.Marshal(nodeToData(updated))
 	_, err = db.Exec(

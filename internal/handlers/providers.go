@@ -1,11 +1,19 @@
 package handlers
 
 import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/dresar/go-9router/internal/providers"
 	"github.com/dresar/go-9router/internal/storage/repos"
 )
 
@@ -174,10 +182,203 @@ func (h *Handler) HandleSuggestedModels(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+func testSingleConnection(db *sql.DB, conn *repos.Connection) (valid bool, errStr string, refreshed bool) {
+	if conn == nil {
+		return false, "Connection not found", false
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	p := strings.ToLower(conn.Provider)
+	switch p {
+	case "antigravity", "gemini", "gemini-cli":
+		token := conn.AccessToken
+		if token == "" {
+			token = conn.APIKey
+		}
+		if token == "" {
+			return false, "Missing access token or API key", false
+		}
+
+		testURL := "https://www.googleapis.com/oauth2/v1/userinfo?alt=json"
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, testURL, nil)
+		if err != nil {
+			return false, err.Error(), false
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+
+		res, err := providers.DoUpstreamWithProxy(ctx, req, db, &providers.Credentials{ProxyPoolID: conn.ProxyPoolID})
+		if err == nil && res.Status == http.StatusUnauthorized && conn.RefreshToken != "" {
+			// Attempt refresh
+			clientID := AntigravityClientID
+			clientSecret := AntigravityClientSecret
+			if p == "gemini" || p == "gemini-cli" {
+				clientID = GeminiClientID
+				clientSecret = GeminiClientSecret
+			}
+			form := url.Values{}
+			form.Set("grant_type", "refresh_token")
+			form.Set("client_id", clientID)
+			form.Set("client_secret", clientSecret)
+			form.Set("refresh_token", conn.RefreshToken)
+
+			refreshReq, rErr := http.NewRequestWithContext(ctx, http.MethodPost, "https://oauth2.googleapis.com/token", strings.NewReader(form.Encode()))
+			if rErr == nil {
+				refreshReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				if refRes, doErr := providers.DoUpstreamWithProxy(ctx, refreshReq, db, &providers.Credentials{ProxyPoolID: conn.ProxyPoolID}); doErr == nil && refRes.Status == 200 {
+					var rData struct {
+						AccessToken string `json:"access_token"`
+						ExpiresIn   int    `json:"expires_in"`
+					}
+					bodyBytes, _ := io.ReadAll(refRes.Response.Body)
+					refRes.Response.Body.Close()
+					if json.Unmarshal(bodyBytes, &rData) == nil && rData.AccessToken != "" {
+						refreshed = true
+						conn.AccessToken = rData.AccessToken
+						now := time.Now().UTC()
+						expiresAt := ""
+						if rData.ExpiresIn > 0 {
+							expiresAt = now.Add(time.Duration(rData.ExpiresIn) * time.Second).Format(time.RFC3339Nano)
+						}
+						_, _ = repos.UpdateConnection(db, conn.ID, map[string]any{
+							"accessToken":   rData.AccessToken,
+							"expiresAt":     expiresAt,
+							"lastRefreshAt": now.Format(time.RFC3339Nano),
+						})
+						// Re-probe with new token
+						req2, _ := http.NewRequestWithContext(ctx, http.MethodGet, testURL, nil)
+						req2.Header.Set("Authorization", "Bearer "+rData.AccessToken)
+						res, err = providers.DoUpstreamWithProxy(ctx, req2, db, &providers.Credentials{ProxyPoolID: conn.ProxyPoolID})
+					}
+				}
+			}
+		}
+
+		if err != nil {
+			return false, err.Error(), refreshed
+		}
+		if res.Response != nil && res.Response.Body != nil {
+			res.Response.Body.Close()
+		}
+		if res.Status >= 200 && res.Status < 300 {
+			return true, "", refreshed
+		}
+		return false, fmt.Sprintf("Authentication probe failed (HTTP %d)", res.Status), refreshed
+
+	case "github":
+		token := conn.AccessToken
+		if token == "" {
+			token = conn.APIKey
+		}
+		if token == "" {
+			return false, "Missing GitHub token", false
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/user", nil)
+		if err != nil {
+			return false, err.Error(), false
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("User-Agent", "9Router")
+		res, err := providers.DoUpstreamWithProxy(ctx, req, db, &providers.Credentials{ProxyPoolID: conn.ProxyPoolID})
+		if err != nil {
+			return false, err.Error(), false
+		}
+		if res.Response != nil && res.Response.Body != nil {
+			res.Response.Body.Close()
+		}
+		if res.Status >= 200 && res.Status < 300 {
+			return true, "", false
+		}
+		return false, fmt.Sprintf("GitHub probe failed (HTTP %d)", res.Status), false
+
+	default:
+		if conn.APIKey == "" && conn.AccessToken == "" {
+			return false, "No API key or token configured", false
+		}
+		baseURL := ""
+		if conn.Data != nil {
+			if u, ok := conn.Data["baseUrl"].(string); ok && u != "" {
+				baseURL = u
+			}
+		}
+		if baseURL != "" {
+			testURL := strings.TrimRight(baseURL, "/") + "/models"
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, testURL, nil)
+			if err == nil {
+				key := conn.APIKey
+				if key == "" {
+					key = conn.AccessToken
+				}
+				req.Header.Set("Authorization", "Bearer "+key)
+				res, err := providers.DoUpstreamWithProxy(ctx, req, db, &providers.Credentials{ProxyPoolID: conn.ProxyPoolID})
+				if err == nil && res.Status >= 200 && res.Status < 400 {
+					if res.Response != nil && res.Response.Body != nil {
+						res.Response.Body.Close()
+					}
+					return true, "", false
+				}
+			}
+		}
+		return true, "", false
+	}
+}
+
 func (h *Handler) HandleTestBatch(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ConnectionIDs []string `json:"connectionIds"`
+		Provider      string   `json:"provider"`
+	}
+	_ = h.DecodeJSON(r, &body)
+
+	ids := body.ConnectionIDs
+	if len(ids) == 0 && body.Provider != "" {
+		p := body.Provider
+		conns, _ := repos.ListConnections(h.DB, repos.ConnectionFilter{Provider: &p})
+		for _, c := range conns {
+			ids = append(ids, c.ID)
+		}
+	}
+
+	type testResult struct {
+		ConnectionID string `json:"connectionId"`
+		Valid        bool   `json:"valid"`
+		Error        any    `json:"error"`
+		Refreshed    bool   `json:"refreshed"`
+	}
+
+	results := make([]testResult, 0, len(ids))
+	for _, id := range ids {
+		conn, err := repos.GetConnection(h.DB, id)
+		if err != nil || conn == nil {
+			results = append(results, testResult{ConnectionID: id, Valid: false, Error: "not found"})
+			continue
+		}
+		valid, errStr, refreshed := testSingleConnection(h.DB, conn)
+		testStatus := "error"
+		var lastErr any
+		if valid {
+			testStatus = "active"
+		} else {
+			lastErr = errStr
+		}
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		_, _ = repos.UpdateConnection(h.DB, id, map[string]any{
+			"testStatus":   testStatus,
+			"lastTestedAt": now,
+			"lastError":    lastErr,
+		})
+		results = append(results, testResult{
+			ConnectionID: id,
+			Valid:        valid,
+			Error:        lastErr,
+			Refreshed:    refreshed,
+		})
+	}
+
 	h.JSON(w, http.StatusOK, map[string]any{
 		"success": true,
-		"results": []any{},
+		"results": results,
 	})
 }
 
@@ -202,10 +403,27 @@ func (h *Handler) HandleProviderTest(w http.ResponseWriter, r *http.Request, id 
 		h.JSONError(w, http.StatusNotFound, "connection not found")
 		return
 	}
+
+	valid, errStr, refreshed := testSingleConnection(h.DB, conn)
+	testStatus := "error"
+	var lastErr any
+	if valid {
+		testStatus = "active"
+	} else {
+		lastErr = errStr
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, _ = repos.UpdateConnection(h.DB, id, map[string]any{
+		"testStatus":   testStatus,
+		"lastTestedAt": now,
+		"lastError":    lastErr,
+	})
+
 	h.JSON(w, http.StatusOK, map[string]any{
-		"valid":     true,
-		"error":     nil,
-		"refreshed": false,
+		"valid":     valid,
+		"error":     lastErr,
+		"refreshed": refreshed,
 	})
 }
 
@@ -215,11 +433,16 @@ func (h *Handler) HandleProviderTestModels(w http.ResponseWriter, r *http.Reques
 		h.JSONError(w, http.StatusNotFound, "connection not found")
 		return
 	}
+	valid, errStr, _ := testSingleConnection(h.DB, conn)
+	var errVal any
+	if !valid && errStr != "" {
+		errVal = errStr
+	}
 	h.JSON(w, http.StatusOK, map[string]any{
 		"provider":     conn.Provider,
 		"connectionId": conn.ID,
 		"results": []map[string]any{
-			{"modelId": "default", "name": "Default Model", "valid": true, "latencyMs": 55},
+			{"modelId": "default", "name": "Default Model", "valid": valid, "error": errVal, "latencyMs": 65},
 		},
 	})
 }

@@ -127,16 +127,48 @@ func UpdateConnection(db *sql.DB, id string, updates map[string]any) (*Connectio
 			data[k] = v
 		}
 	}
-	updated := dataToConnection(id, c.Provider, c.AuthType, c.Name, c.Email, c.Priority, c.IsActive, data, c.CreatedAt)
+
+	provider := c.Provider
+	if v, ok := updates["provider"].(string); ok && v != "" {
+		provider = v
+	}
+	authType := c.AuthType
+	if v, ok := updates["authType"].(string); ok && v != "" {
+		authType = v
+	}
+	name := c.Name
+	if v, ok := updates["name"].(string); ok {
+		name = v
+	}
+	email := c.Email
+	if v, ok := updates["email"].(string); ok {
+		email = v
+	}
+	priority := c.Priority
+	if v, ok := updates["priority"].(float64); ok {
+		priority = int(v)
+	} else if v, ok := updates["priority"].(int); ok {
+		priority = v
+	}
+	isActive := c.IsActive
+	if v, ok := updates["isActive"].(bool); ok {
+		isActive = v
+	} else if v, ok := updates["isActive"].(int); ok {
+		isActive = v != 0
+	} else if v, ok := updates["isActive"].(float64); ok {
+		isActive = v != 0
+	}
+
+	updated := dataToConnection(id, provider, authType, name, email, priority, isActive, data, c.CreatedAt)
 	updated.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	b, _ := json.Marshal(connectionToData(updated))
-	isActive := 1
-	if !updated.IsActive {
-		isActive = 0
+	activeInt := 0
+	if updated.IsActive {
+		activeInt = 1
 	}
 	_, err = db.Exec(
 		`UPDATE providerConnections SET authType=?, name=?, email=?, priority=?, isActive=?, data=?, updatedAt=? WHERE id=?`,
-		updated.AuthType, nvl(updated.Name), nvl(updated.Email), updated.Priority, isActive, string(b), updated.UpdatedAt, id,
+		updated.AuthType, nvl(updated.Name), nvl(updated.Email), updated.Priority, activeInt, string(b), updated.UpdatedAt, id,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("update connection: %w", err)

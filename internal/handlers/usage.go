@@ -1,10 +1,14 @@
 package handlers
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/dresar/go-9router/internal/providers"
 	"github.com/dresar/go-9router/internal/storage/repos"
 )
 
@@ -162,5 +166,60 @@ func (h *Handler) HandleUsageConnectionSub(w http.ResponseWriter, r *http.Reques
 		})
 		return
 	}
-	h.HandleUsageStats(w, r)
+
+	conn, err := repos.GetConnection(h.DB, sub)
+	if err != nil || conn == nil {
+		h.HandleUsageStats(w, r)
+		return
+	}
+
+	quotas := map[string]any{
+		"gemini_weekly": map[string]any{
+			"name":                "Gemini Weekly",
+			"used":                0,
+			"total":               1000,
+			"remainingPercentage": 100,
+		},
+		"claude_gpt_weekly": map[string]any{
+			"name":                "Claude / GPT Weekly",
+			"used":                0,
+			"total":               1000,
+			"remainingPercentage": 100,
+		},
+	}
+	plan := "Pro"
+
+	if strings.ToLower(conn.Provider) == "antigravity" && conn.AccessToken != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		loadReqBody := []byte(`{"project":"` + conn.ProjectID + `"}`)
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels", bytes.NewReader(loadReqBody))
+		if req != nil {
+			req.Header.Set("Authorization", "Bearer "+conn.AccessToken)
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("User-Agent", "antigravity/ide/2.11.0 windows/amd64")
+			req.Header.Set("X-Client-Name", "antigravity")
+			req.Header.Set("X-Client-Version", "2.11.0")
+
+			res, uErr := providers.DoUpstreamWithProxy(ctx, req, h.DB, &providers.Credentials{ProxyPoolID: conn.ProxyPoolID})
+			if uErr == nil && res.Status == 200 && res.Response != nil {
+				defer res.Response.Body.Close()
+				var data struct {
+					Models map[string]any `json:"models"`
+				}
+				if json.NewDecoder(res.Response.Body).Decode(&data) == nil && len(data.Models) > 0 {
+					for k, v := range data.Models {
+						if m, ok := v.(map[string]any); ok {
+							quotas[k] = m
+						}
+					}
+				}
+			}
+		}
+	}
+
+	h.JSON(w, http.StatusOK, map[string]any{
+		"plan":   plan,
+		"quotas": quotas,
+	})
 }

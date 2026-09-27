@@ -127,6 +127,10 @@ func (h *Handler) HandleProxyPoolByID(w http.ResponseWriter, r *http.Request) {
 		h.JSONError(w, http.StatusBadRequest, "missing id")
 		return
 	}
+	if strings.HasSuffix(id, "/test") {
+		h.HandleProxyPoolTest(w, r)
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		p, err := repos.GetProxyPoolByID(h.DB, id)
@@ -359,26 +363,6 @@ func (h *Handler) HandleProxyPoolDeploy(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-func (h *Handler) HandleOAuth(w http.ResponseWriter, r *http.Request) {
-	path := r.URL.Path
-	if strings.Contains(path, "auto-import") {
-		h.JSON(w, http.StatusOK, map[string]any{
-			"found": false,
-			"error": "No local session detected",
-		})
-		return
-	}
-	if strings.Contains(path, "poll") || strings.Contains(path, "status") {
-		h.JSON(w, http.StatusOK, map[string]any{
-			"status":    "idle",
-			"completed": false,
-		})
-		return
-	}
-	h.JSON(w, http.StatusOK, map[string]any{
-		"success": true,
-	})
-}
 
 func (h *Handler) HandlePxpipe(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path

@@ -98,16 +98,29 @@ func UpdateProxyPool(db *sql.DB, id string, updates map[string]any) (*ProxyPool,
 			data[k] = v
 		}
 	}
-	updated := dataToPool(id, p.IsActive, p.TestStatus, data, p.CreatedAt)
+	isActive := p.IsActive
+	if v, ok := updates["isActive"].(bool); ok {
+		isActive = v
+	} else if v, ok := updates["isActive"].(int); ok {
+		isActive = v != 0
+	} else if v, ok := updates["isActive"].(float64); ok {
+		isActive = v != 0
+	}
+	testStatus := p.TestStatus
+	if v, ok := updates["testStatus"].(string); ok {
+		testStatus = v
+	}
+
+	updated := dataToPool(id, isActive, testStatus, data, p.CreatedAt)
 	updated.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	b, _ := json.Marshal(poolToData(updated))
-	isActive := 1
-	if !updated.IsActive {
-		isActive = 0
+	activeInt := 0
+	if updated.IsActive {
+		activeInt = 1
 	}
 	_, err = db.Exec(
 		`UPDATE proxyPools SET isActive=?, testStatus=?, data=?, updatedAt=? WHERE id=?`,
-		isActive, nvl(updated.TestStatus), string(b), updated.UpdatedAt, id,
+		activeInt, nvl(updated.TestStatus), string(b), updated.UpdatedAt, id,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("update proxy pool: %w", err)
