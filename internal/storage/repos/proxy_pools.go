@@ -160,6 +160,10 @@ func (p ProxyPool) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m)
 }
 
+func PoolToData(p ProxyPool) map[string]any {
+	return poolToData(p)
+}
+
 func poolToData(p ProxyPool) map[string]any {
 	m := map[string]any{}
 	for k, v := range p.Data {

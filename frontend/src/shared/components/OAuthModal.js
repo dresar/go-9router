@@ -356,7 +356,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
       } else if (provider === "xai") {
         redirectUri = "http://127.0.0.1:56121/callback";
       } else {
-        redirectUri = `http://localhost:${appPort}/callback`;
+        redirectUri = `${window.location.origin}/callback`;
       }
 
       // Build authorize URL first to get codeVerifier/state for codex server-side mode
@@ -588,8 +588,8 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
 
     // Method 1: postMessage from popup
     const handleMessage = (event) => {
-      // Allow messages from same origin or localhost (any port)
-      const isLocalhost = event.origin.includes("localhost") || event.origin.includes("127.0.0.1");
+      // Allow messages from same origin or localhost (any port, IPv4 or IPv6)
+      const isLocalhost = event.origin.includes("localhost") || event.origin.includes("127.0.0.1") || event.origin.includes("[::1]");
       const isSameOrigin = event.origin === window.location.origin;
       if (!isLocalhost && !isSameOrigin) return;
       
@@ -704,24 +704,31 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         return;
       }
 
-      const url = new URL(input);
-      const code = url.searchParams.get("code");
-      const token = url.searchParams.get("token");
-      const state = url.searchParams.get("state");
-      const errorParam = url.searchParams.get("error");
+      let code = null;
+      let token = null;
+      let state = authData?.state || null;
 
-      if (errorParam) {
-        throw new Error(url.searchParams.get("error_description") || errorParam);
+      try {
+        let parseInput = input;
+        if (!parseInput.includes("://")) {
+          parseInput = parseInput.startsWith("/") ? `${window.location.origin}${parseInput}` : `${window.location.origin}/?${parseInput}`;
+        }
+        const url = new URL(parseInput);
+        code = url.searchParams.get("code");
+        token = url.searchParams.get("token");
+        state = url.searchParams.get("state") || state;
+        const errorParam = url.searchParams.get("error");
+        if (errorParam) {
+          throw new Error(url.searchParams.get("error_description") || errorParam);
+        }
+      } catch (e) {
+        if (!code && !token) {
+          code = input;
+        }
       }
 
       if (!code && !token) {
-        throw new Error(
-          provider === "xai"
-            ? "Paste the callback URL or copied xAI code"
-            : provider === "kimchi"
-              ? "No Kimchi token found in URL"
-              : "No authorization code found in URL"
-        );
+        code = input;
       }
 
       await exchangeTokens(token || code, state);

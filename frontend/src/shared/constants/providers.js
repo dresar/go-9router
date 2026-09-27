@@ -38,8 +38,81 @@ function buildProviderEntry(r) {
   };
 }
 
+// List of paid subscription / commercial per-token providers to filter out
+export const PAID_PROVIDERS = new Set([
+  // Paid OAuth subscription providers
+  "claude",
+  "codex",
+  "github",
+  "grok-cli",
+  "grok-web",
+  "xai",
+  "cursor",
+  "gitlab",
+  "zed",
+
+  // Commercial paid per-token API providers
+  "openai",
+  "anthropic",
+  "cohere",
+  "together",
+  "mistral",
+  "hyperbolic",
+  "exa",
+  "deepseek",
+  "fireworks",
+  "nebius",
+  "fal-ai",
+  "stability-ai",
+  "voyage-ai",
+  "runwayml",
+  "black-forest-labs",
+  "cartesia",
+  "elevenlabs",
+  "playht",
+  "topaz",
+  "perplexity",
+  "perplexity-web",
+  "perplexity-agent",
+  "featherless",
+  "firecrawl",
+  "serper",
+  "searchapi",
+  "tavily",
+  "inworld",
+  "deepgram",
+  "assemblyai",
+  "aws-polly",
+  "azure",
+  "volcengine-ark",
+  "minimax",
+  "minimax-cn",
+  "glm",
+  "glm-cn",
+  "baidu",
+  "tencent",
+  "bluesminds",
+  "tokenrouter",
+  "tokenharbor",
+  "xquik",
+  "dahl",
+  "atria",
+  "alicode",
+  "alicode-intl",
+  "alims-intl",
+  "alitp-intl",
+  "opencode-go",
+  "opencode-zen",
+  "blackbox",
+  "brave-search",
+  "linkup",
+  "recraft",
+  "youcom",
+  "fish-audio",
+]);
+
 const byCategory = (cat) => Object.fromEntries(
-  REGISTRY.filter(r => r.category === cat).map(r => [r.id, buildProviderEntry(r)])
+  REGISTRY.filter(r => r.category === cat && !PAID_PROVIDERS.has(r.id)).map(r => [r.id, buildProviderEntry(r)])
 );
 
 export const FREE_PROVIDERS = byCategory("free");

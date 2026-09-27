@@ -53,7 +53,7 @@ func New(h *handlers.Handler, jwtSecret string) http.Handler {
 
 	auth := func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			middleware.RequireSession(jwtSecret, http.HandlerFunc(next)).ServeHTTP(w, r)
+			middleware.RequireSession(jwtSecret, h.DB, http.HandlerFunc(next)).ServeHTTP(w, r)
 		}
 	}
 
@@ -113,6 +113,8 @@ func New(h *handlers.Handler, jwtSecret string) http.Handler {
 
 	mux.HandleFunc("/api/oauth", h.HandleOAuth)
 	mux.HandleFunc("/api/oauth/", h.HandleOAuth)
+	mux.HandleFunc("/callback", h.HandleOAuthCallback)
+	mux.HandleFunc("/callback/", h.HandleOAuthCallback)
 	mux.HandleFunc("/api/mcp", notImplemented)
 	mux.HandleFunc("/api/mcp/", notImplemented)
 	mux.HandleFunc("/api/headroom", h.HandleHeadroomStatus)

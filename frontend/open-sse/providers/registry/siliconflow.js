@@ -12,7 +12,7 @@ export default {
       apiKeyUrl: "https://cloud.siliconflow.com/account/ak",
     },
   },
-  category: "apikey",
+  category: "freeTier",
   transport: {
     baseUrl: "https://api.siliconflow.com/v1/chat/completions",
     validateUrl: "https://api.siliconflow.com/v1/models",

@@ -3,7 +3,6 @@ export default {
   alias: "samba",
   aliases: ["sambanova-ai"],
   uiAlias: "samba",
-  hidden: true,
   display: {
     name: "SambaNova",
     icon: "memory",
@@ -14,7 +13,7 @@ export default {
       apiKeyUrl: "https://cloud.sambanova.ai/apis",
     },
   },
-  category: "apikey",
+  category: "freeTier",
   authType: "apikey",
   authModes: ["apikey"],
   transport: {

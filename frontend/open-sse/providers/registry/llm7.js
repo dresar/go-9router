@@ -15,7 +15,7 @@ export default {
       apiKeyUrl: "https://llm7.io",
     },
   },
-  category: "apikey",
+  category: "freeTier",
   authType: "apikey",
   authModes: [
     "apikey",

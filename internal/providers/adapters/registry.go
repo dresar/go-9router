@@ -191,6 +191,7 @@ var KnownProviders = map[string]providers.ProviderAdapter{
 	"llm7":             NewGenericAPIKey("llm7", "https://api.llm7.io", "Bearer"),
 	"morph":            NewGenericAPIKey("morph", "https://api.morph.so", "Bearer"),
 	"xiaomi-tokenplan": NewGenericAPIKey("xiaomi-tokenplan", "https://api.xiaomi.com", "Bearer"),
+	"bynara":           NewGenericAPIKey("bynara", "https://router.bynara.id/v1", "Bearer"),
 }
 
 func GetAdapter(providerID string) (providers.ProviderAdapter, bool) {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dresar/go-9router/internal/providers"
+	"github.com/dresar/go-9router/internal/storage/repos"
 )
 
 func (h *Handler) HandleEmbeddings(w http.ResponseWriter, r *http.Request) {
@@ -164,20 +165,54 @@ func (h *Handler) HandleAudioSpeech(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	modelStr, _ := body["model"].(string)
-	if modelStr == "" {
-		modelStr = "openai/tts-1"
+	inputStr, _ := body["input"].(string)
+	if strings.TrimSpace(inputStr) == "" {
+		h.JSONError(w, http.StatusBadRequest, "Missing required field: input")
+		return
 	}
 
-	providerID, modelID, ok := providers.ResolveModelProvider(modelStr, h.DB)
-	if !ok {
-		providerID = "openai"
-		modelID = modelStr
+	modelStr, _ := body["model"].(string)
+	voiceStr, _ := body["voice"].(string)
+	targetVoice := voiceStr
+	if targetVoice == "" {
+		targetVoice = modelStr
+	}
+
+	providerID, modelID, hasProvider := providers.ResolveModelProvider(modelStr, h.DB)
+	isEdgeTTS := providerID == "edge-tts" ||
+		providerID == "local-device" ||
+		strings.Contains(strings.ToLower(modelStr), "neural") ||
+		strings.Contains(strings.ToLower(voiceStr), "neural") ||
+		!hasProvider
+
+	if isEdgeTTS {
+		if targetVoice == "" || targetVoice == "edge-tts" || targetVoice == "tts-1" {
+			targetVoice = "id-ID-GadisNeural"
+		}
+		audioBytes, err := providers.SynthesizeEdgeTTS(inputStr, targetVoice)
+		if err != nil {
+			h.JSONError(w, http.StatusBadGateway, "Edge TTS synthesis failed: "+err.Error())
+			return
+		}
+		w.Header().Set("Content-Type", "audio/mpeg")
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(audioBytes)))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(audioBytes)
+		return
 	}
 
 	sel, err := providers.SelectCredentials(h.DB, providerID, nil)
 	if err != nil || sel == nil {
-		h.JSONError(w, http.StatusNotFound, fmt.Sprintf("no active credentials for provider: %s", providerID))
+		// Fallback to Edge TTS
+		audioBytes, err := providers.SynthesizeEdgeTTS(inputStr, "id-ID-GadisNeural")
+		if err != nil {
+			h.JSONError(w, http.StatusNotFound, fmt.Sprintf("no active credentials for provider: %s", providerID))
+			return
+		}
+		w.Header().Set("Content-Type", "audio/mpeg")
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(audioBytes)))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(audioBytes)
 		return
 	}
 
@@ -223,15 +258,37 @@ func (h *Handler) HandleAudioTranscriptions(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	sel, err := providers.SelectCredentials(h.DB, "openai", nil)
-	if err != nil || sel == nil {
+	active := true
+	conns, _ := repos.ListConnections(h.DB, repos.ConnectionFilter{IsActive: &active})
+	var selConn *repos.Connection
+	for _, c := range conns {
+		if c.Provider == "groq" || c.Provider == "bynara" || c.Provider == "openai" {
+			selConn = &c
+			break
+		}
+	}
+	if selConn == nil && len(conns) > 0 {
+		selConn = &conns[0]
+	}
+
+	if selConn == nil {
 		h.JSONError(w, http.StatusNotFound, "no active credentials for speech-to-text")
 		return
 	}
 
-	baseURL := sel.Credentials.BaseURL
+	baseURL, _ := selConn.Data["baseUrl"].(string)
+	apiKey := selConn.APIKey
+	if apiKey == "" {
+		apiKey, _ = selConn.Data["apiKey"].(string)
+	}
 	if baseURL == "" {
-		baseURL = "https://api.openai.com/v1"
+		if selConn.Provider == "groq" {
+			baseURL = "https://api.groq.com/openai/v1"
+		} else if selConn.Provider == "bynara" {
+			baseURL = "https://router.bynara.id/v1"
+		} else {
+			baseURL = "https://api.openai.com/v1"
+		}
 	}
 	baseURL = strings.TrimSuffix(baseURL, "/")
 
@@ -241,8 +298,8 @@ func (h *Handler) HandleAudioTranscriptions(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	req.Header.Set("Content-Type", r.Header.Get("Content-Type"))
-	if sel.Credentials.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+sel.Credentials.APIKey)
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 
 	client := &http.Client{Timeout: providers.DefaultClientTimeout}

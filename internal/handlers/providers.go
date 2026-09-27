@@ -302,6 +302,14 @@ func testSingleConnection(db *sql.DB, conn *repos.Connection) (valid bool, errSt
 				baseURL = u
 			}
 		}
+		if baseURL == "" && conn.ProviderSpecificData != nil {
+			if u, ok := conn.ProviderSpecificData["baseUrl"].(string); ok && u != "" {
+				baseURL = u
+			}
+		}
+		if baseURL == "" && p == "bynara" {
+			baseURL = "https://router.bynara.id/v1"
+		}
 		if baseURL != "" {
 			testURL := strings.TrimRight(baseURL, "/") + "/models"
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, testURL, nil)

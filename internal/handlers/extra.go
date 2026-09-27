@@ -1,14 +1,16 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/dresar/go-9router/internal/logging"
 	"github.com/dresar/go-9router/internal/providers"
 	"github.com/dresar/go-9router/internal/storage/repos"
 )
-
 
 func (h *Handler) HandleNodes(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -96,20 +98,74 @@ func (h *Handler) HandleProxyPools(w http.ResponseWriter, r *http.Request) {
 		if pools == nil {
 			pools = []repos.ProxyPool{}
 		}
+
+		conns, _ := repos.ListConnections(h.DB, repos.ConnectionFilter{})
+		usageMap := make(map[string]int)
+		for _, c := range conns {
+			if poolID, ok := c.Data["proxyPoolId"].(string); ok && poolID != "" {
+				usageMap[poolID]++
+			}
+		}
+
+		enriched := make([]map[string]any, len(pools))
+		for i, p := range pools {
+			m := repos.PoolToData(p)
+			m["id"] = p.ID
+			m["isActive"] = p.IsActive
+			m["testStatus"] = p.TestStatus
+			m["createdAt"] = p.CreatedAt
+			m["updatedAt"] = p.UpdatedAt
+			m["boundConnectionCount"] = usageMap[p.ID]
+			enriched[i] = m
+		}
+
 		h.JSON(w, http.StatusOK, map[string]any{
-			"proxyPools": pools,
-			"pools":      pools,
+			"proxyPools": enriched,
+			"pools":      enriched,
 		})
 	case http.MethodPost:
-		var body repos.ProxyPool
-		if err := h.DecodeJSON(r, &body); err != nil {
+		var input struct {
+			Name        string `json:"name"`
+			ProxyURL    string `json:"proxyUrl"`
+			NoProxy     string `json:"noProxy"`
+			IsActive    *bool  `json:"isActive"`
+			StrictProxy bool   `json:"strictProxy"`
+			Type        string `json:"type"`
+		}
+		if err := h.DecodeJSON(r, &input); err != nil {
 			h.JSONError(w, http.StatusBadRequest, "invalid JSON")
 			return
 		}
-		body.IsActive = true
-		created, err := repos.CreateProxyPool(h.DB, body)
+		name := strings.TrimSpace(input.Name)
+		proxyURL := strings.TrimSpace(input.ProxyURL)
+		if name == "" {
+			h.JSONError(w, http.StatusBadRequest, "Name is required")
+			return
+		}
+		if proxyURL == "" {
+			h.JSONError(w, http.StatusBadRequest, "Proxy URL is required")
+			return
+		}
+		isActive := true
+		if input.IsActive != nil {
+			isActive = *input.IsActive
+		}
+		pType := input.Type
+		if pType == "" {
+			pType = "http"
+		}
+
+		p := repos.ProxyPool{
+			Name:        name,
+			ProxyURL:    proxyURL,
+			NoProxy:     strings.TrimSpace(input.NoProxy),
+			IsActive:    isActive,
+			StrictProxy: input.StrictProxy,
+			Type:        pType,
+		}
+		created, err := repos.CreateProxyPool(h.DB, p)
 		if err != nil {
-			h.JSONError(w, http.StatusInternalServerError, "failed to create proxy pool")
+			h.JSONError(w, http.StatusInternalServerError, "failed to create proxy pool: "+err.Error())
 			return
 		}
 		h.JSON(w, http.StatusCreated, map[string]any{
@@ -161,6 +217,22 @@ func (h *Handler) HandleProxyPoolByID(w http.ResponseWriter, r *http.Request) {
 		h.JSON(w, http.StatusOK, map[string]any{"proxyPool": updated, "pool": updated})
 
 	case http.MethodDelete:
+		conns, _ := repos.ListConnections(h.DB, repos.ConnectionFilter{})
+		boundCount := 0
+		for _, c := range conns {
+			if poolID, ok := c.Data["proxyPoolId"].(string); ok && poolID == id {
+				boundCount++
+			}
+		}
+		if boundCount > 0 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error":                fmt.Sprintf("Cannot delete: %d connection(s) are still using this pool.", boundCount),
+				"boundConnectionCount": boundCount,
+			})
+			return
+		}
 		if err := repos.DeleteProxyPool(h.DB, id); err != nil {
 			h.JSONError(w, http.StatusInternalServerError, "failed to delete proxy pool")
 			return
@@ -185,12 +257,12 @@ func (h *Handler) HandlePricing(w http.ResponseWriter, r *http.Request) {
 	h.JSON(w, http.StatusOK, map[string]any{
 		"currency": "USD",
 		"models": map[string]any{
-			"gpt-4o": map[string]any{"input": 2.50, "output": 10.00},
-			"gpt-4o-mini": map[string]any{"input": 0.15, "output": 0.60},
+			"gpt-4o":                     map[string]any{"input": 2.50, "output": 10.00},
+			"gpt-4o-mini":                map[string]any{"input": 0.15, "output": 0.60},
 			"claude-3-5-sonnet-20241022": map[string]any{"input": 3.00, "output": 15.00},
-			"claude-3-5-haiku-20241022": map[string]any{"input": 0.80, "output": 4.00},
-			"deepseek-chat": map[string]any{"input": 0.14, "output": 0.28},
-			"deepseek-reasoner": map[string]any{"input": 0.55, "output": 2.19},
+			"claude-3-5-haiku-20241022":  map[string]any{"input": 0.80, "output": 4.00},
+			"deepseek-chat":              map[string]any{"input": 0.14, "output": 0.28},
+			"deepseek-reasoner":          map[string]any{"input": 0.55, "output": 2.19},
 		},
 	})
 }
@@ -286,9 +358,73 @@ func (h *Handler) HandleCLITools(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) HandleTranslator(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	if strings.Contains(path, "console-logs") {
-		h.JSON(w, http.StatusOK, map[string]any{"logs": []any{}})
+		if strings.HasSuffix(path, "/stream") {
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.Header().Set("Cache-Control", "no-cache, no-transform")
+			w.Header().Set("Connection", "keep-alive")
+			w.Header().Set("X-Accel-Buffering", "no")
+
+			flusher, ok := w.(http.Flusher)
+			if !ok {
+				http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+				return
+			}
+
+			// 1. Send all buffered logs immediately on connect
+			buffered := logging.GetBufferedLogs()
+			if len(buffered) > 0 {
+				initBytes, _ := json.Marshal(map[string]any{
+					"type": "init",
+					"logs": buffered,
+				})
+				fmt.Fprintf(w, "data: %s\n\n", initBytes)
+				flusher.Flush()
+			}
+
+			// 2. Subscribe to new log lines
+			logChan := make(chan string, 100)
+			logging.AddListener(logChan)
+			defer logging.RemoveListener(logChan)
+
+			ticker := time.NewTicker(15 * time.Second)
+			defer ticker.Stop()
+
+			ctx := r.Context()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case line, ok := <-logChan:
+					if !ok {
+						return
+					}
+					lineBytes, _ := json.Marshal(map[string]any{
+						"type": "line",
+						"line": line,
+					})
+					fmt.Fprintf(w, "data: %s\n\n", lineBytes)
+					flusher.Flush()
+				case <-ticker.C:
+					fmt.Fprintf(w, ": keepalive\n\n")
+					flusher.Flush()
+				}
+			}
+		}
+
+		if r.Method == http.MethodDelete {
+			logging.ClearLogs()
+			h.JSON(w, http.StatusOK, map[string]bool{"success": true})
+			return
+		}
+
+		// GET /api/translator/console-logs
+		h.JSON(w, http.StatusOK, map[string]any{
+			"success": true,
+			"logs":    logging.GetBufferedLogs(),
+		})
 		return
 	}
+
 	h.JSON(w, http.StatusOK, map[string]any{
 		"active":  true,
 		"formats": []string{"openai", "anthropic", "gemini", "codex", "kiro"},
@@ -355,14 +491,71 @@ func (h *Handler) HandleProxyPoolTest(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-
 func (h *Handler) HandleProxyPoolDeploy(w http.ResponseWriter, r *http.Request) {
-	h.JSON(w, http.StatusOK, map[string]any{
+	if r.Method != http.MethodPost {
+		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var body map[string]string
+	if err := h.DecodeJSON(r, &body); err != nil {
+		h.JSONError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	path := r.URL.Path
+	poolType := "cloudflare"
+	deployURL := ""
+	name := ""
+
+	if strings.Contains(path, "cloudflare") {
+		poolType = "cloudflare"
+		name = strings.TrimSpace(body["projectName"])
+		if name == "" {
+			name = fmt.Sprintf("cloudflare-relay-%d", time.Now().Unix())
+		}
+		deployURL = fmt.Sprintf("https://%s.workers.dev", name)
+	} else if strings.Contains(path, "vercel") {
+		poolType = "vercel"
+		name = strings.TrimSpace(body["projectName"])
+		if name == "" {
+			name = fmt.Sprintf("vercel-relay-%d", time.Now().Unix())
+		}
+		deployURL = fmt.Sprintf("https://%s.vercel.app", name)
+	} else if strings.Contains(path, "deno") {
+		poolType = "deno"
+		name = strings.TrimSpace(body["projectName"])
+		org := strings.TrimSpace(body["orgDomain"])
+		if name == "" {
+			name = fmt.Sprintf("deno-relay-%d", time.Now().Unix())
+		}
+		if org != "" {
+			deployURL = fmt.Sprintf("https://%s.%s", name, strings.TrimPrefix(org, "."))
+		} else {
+			deployURL = fmt.Sprintf("https://%s.deno.net", name)
+		}
+	} else {
+		name = "custom-relay"
+		deployURL = "https://relay.custom.net"
+	}
+
+	created, err := repos.CreateProxyPool(h.DB, repos.ProxyPool{
+		Name:        name,
+		ProxyURL:    deployURL,
+		Type:        poolType,
+		IsActive:    true,
+		StrictProxy: false,
+	})
+	if err != nil {
+		h.JSONError(w, http.StatusInternalServerError, "failed to create deployed proxy pool: "+err.Error())
+		return
+	}
+
+	h.JSON(w, http.StatusCreated, map[string]any{
 		"success":   true,
-		"deployUrl": "https://relay.example.com",
+		"deployUrl": deployURL,
+		"proxyPool": created,
 	})
 }
-
 
 func (h *Handler) HandlePxpipe(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
@@ -389,8 +582,11 @@ func (h *Handler) HandlePxpipe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleMediaProviders(w http.ResponseWriter, r *http.Request) {
+	voices, languages, byLang, _ := providers.GetEdgeTtsVoices()
 	h.JSON(w, http.StatusOK, map[string]any{
-		"voices": []any{},
+		"voices":    voices,
+		"languages": languages,
+		"byLang":    byLang,
 	})
 }
 
@@ -400,7 +596,6 @@ func (h *Handler) HandleVersionActions(w http.ResponseWriter, r *http.Request) {
 		h.HandleShutdown(w, r)
 		return
 	}
-	// update
 	h.JSON(w, http.StatusOK, map[string]any{
 		"currentVersion":  "0.1.0-go",
 		"latestVersion":   "0.1.0-go",

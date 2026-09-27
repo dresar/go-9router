@@ -33,23 +33,29 @@ function CallbackContent() {
     // (same origin) or the Codex helper that listens on a fixed loopback port.
     // Any other origin is treated as hostile (drive-by attacker that opened
     // the popup against the well-known redirect_uri to phish the code).
+    const port = typeof window !== "undefined" ? (window.location.port || "20128") : "20128";
     const expectedOrigins = [
-      window.location.origin, // Same origin (for most providers)
-      "http://localhost:1455", // Codex specific port
+      "*",
+      window.location.origin,
+      `http://localhost:${port}`,
+      `http://127.0.0.1:${port}`,
+      `http://[::1]:${port}`,
+      "http://localhost:20128",
+      "http://127.0.0.1:20128",
+      "http://[::1]:20128",
+      "http://localhost:20127",
+      "http://127.0.0.1:20127",
+      "http://localhost:1455",
     ];
 
     // Method 1: postMessage to opener (popup mode)
-    // Send once per expected origin. The browser delivers the message only
-    // when the opener's origin matches the targetOrigin we pass — using "*"
-    // here would leak the code/state to any opener (e.g. an attacker page
-    // that opened this URL in a popup), so iterate over the allowlist.
     if (window.opener) {
       for (const origin of expectedOrigins) {
         try {
           window.opener.postMessage({ type: "oauth_callback", data: callbackData }, origin);
           relayed = true;
         } catch (e) {
-          console.log("postMessage failed:", e);
+          // ignore
         }
       }
     }

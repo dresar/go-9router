@@ -26,10 +26,16 @@ export function resolveProviderIconId(providerId) {
   return aliased;
 }
 
-/** `/providers/{id}.png` or null when previously failed. */
+const SVG_ICON_PROVIDERS = new Set(["bynara", "codewhale", "pi", "smelt", "kimchi"]);
+
+/** `/providers/{id}.png` or `/providers/{id}.svg` or null when previously failed. */
 export function getProviderIconSrc(providerId) {
   const id = resolveProviderIconId(providerId);
-  return id ? `/providers/${id}.png` : null;
+  if (!id) return null;
+  if (SVG_ICON_PROVIDERS.has(id)) {
+    return `/providers/${id}.svg`;
+  }
+  return `/providers/${id}.png`;
 }
 
 /** Call from img onError so later mounts skip the request. */

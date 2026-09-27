@@ -10,7 +10,7 @@ export default {
     textIcon: "OL",
     website: "https://ollama.com",
   },
-  category: "apikey",
+  category: "free",
   transport: {
     baseUrl: "http://localhost:11434/api/chat",
     format: "ollama",
