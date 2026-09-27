@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/dresar/go-9router/internal/logging"
 	"github.com/dresar/go-9router/internal/providers"
 	"github.com/dresar/go-9router/internal/storage/repos"
+	"github.com/dresar/go-9router/internal/tunnel"
 )
 
 func (h *Handler) HandleNodes(w http.ResponseWriter, r *http.Request) {
@@ -268,34 +270,79 @@ func (h *Handler) HandlePricing(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleTunnelStatus(w http.ResponseWriter, r *http.Request) {
-	h.JSON(w, http.StatusOK, map[string]any{
-		"tunnel": map[string]any{
-			"enabled": false,
-			"status":  "stopped",
-			"url":     "",
-		},
-		"tailscale": map[string]any{
-			"enabled":   false,
-			"status":    "stopped",
-			"url":       "",
-			"installed": false,
-		},
-		"download": nil,
-	})
+	h.JSON(w, http.StatusOK, tunnel.DefaultManager.GetStatus())
+}
+
+func (h *Handler) getPortInt() int {
+	if h.Cfg != nil && h.Cfg.Port != "" {
+		if p, err := strconv.Atoi(h.Cfg.Port); err == nil && p > 0 {
+			return p
+		}
+	}
+	return 20128
 }
 
 func (h *Handler) HandleTunnelAction(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	if strings.HasSuffix(path, "tailscale-check") {
+		h.JSON(w, http.StatusOK, tunnel.DefaultManager.CheckTailscale())
+		return
+	}
+	if strings.HasSuffix(path, "tailscale-enable") {
+		port := h.getPortInt()
+		url, err := tunnel.DefaultManager.EnableTailscale(port)
+		if err != nil {
+			h.JSON(w, http.StatusOK, map[string]any{
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
 		h.JSON(w, http.StatusOK, map[string]any{
-			"installed":           false,
-			"loggedIn":            false,
-			"platform":            "windows",
-			"brewAvailable":       false,
-			"daemonRunning":       false,
-			"customDaemonRunning": false,
-			"systemDaemonRunning": false,
-			"hasCachedPassword":   false,
+			"success":   true,
+			"tunnelUrl": url,
+			"enabled":   true,
+		})
+		return
+	}
+	if strings.HasSuffix(path, "tailscale-disable") {
+		port := h.getPortInt()
+		_ = tunnel.DefaultManager.DisableTailscale(port)
+		h.JSON(w, http.StatusOK, map[string]any{"success": true})
+		return
+	}
+	if strings.HasSuffix(path, "tailscale-install") {
+		h.JSON(w, http.StatusOK, map[string]any{
+			"success": false,
+			"error":   "Tailscale on Windows must be installed via the official installer: https://tailscale.com/download/windows",
+		})
+		return
+	}
+	if strings.HasSuffix(path, "enable") {
+		port := h.getPortInt()
+		url, err := tunnel.DefaultManager.StartCloudflare(port)
+		if err != nil {
+			h.JSON(w, http.StatusOK, map[string]any{
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
+		h.JSON(w, http.StatusOK, map[string]any{
+			"success":   true,
+			"enabled":   true,
+			"status":    "running",
+			"tunnelUrl": url,
+			"publicUrl": url,
+		})
+		return
+	}
+	if strings.HasSuffix(path, "disable") {
+		_ = tunnel.DefaultManager.StopCloudflare()
+		h.JSON(w, http.StatusOK, map[string]any{
+			"success": true,
+			"enabled": false,
+			"status":  "stopped",
 		})
 		return
 	}

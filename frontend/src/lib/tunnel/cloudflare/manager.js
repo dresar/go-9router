@@ -20,11 +20,16 @@ let onUnexpectedExit = null;
 export function setTunnelUnexpectedExitCallback(cb) { onUnexpectedExit = cb; }
 
 async function registerTunnelUrl(shortId, tunnelUrl) {
-  await fetch(`${WORKER_URL}/api/tunnel/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ shortId, tunnelUrl })
-  });
+  if (!WORKER_URL || WORKER_URL.includes("abc-tunnel.us")) return;
+  try {
+    await fetch(`${WORKER_URL}/api/tunnel/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shortId, tunnelUrl })
+    });
+  } catch (err) {
+    console.warn("[Tunnel] worker register skipped:", err.message);
+  }
 }
 
 function throwIfCancelled(token) {
@@ -41,18 +46,14 @@ export async function enableTunnel(localPort = 20128) {
   try {
     if (isCloudflaredRunning()) {
       const existing = loadState();
-      if (existing?.tunnelUrl && existing?.shortId) {
-        const publicUrl = `https://r${existing.shortId}.abc-tunnel.us`;
-        // Reuse only if BOTH direct + public URL alive (avoid stale socket after network change)
-        const [directOk, publicOk] = await Promise.all([
-          probeUrlAlive(existing.tunnelUrl),
-          probeUrlAlive(publicUrl),
-        ]);
-        if (directOk && publicOk) {
+      if (existing?.tunnelUrl) {
+        const publicUrl = existing.tunnelUrl;
+        const directOk = await probeUrlAlive(existing.tunnelUrl);
+        if (directOk) {
           console.log(`[Tunnel] already running, reuse: ${existing.tunnelUrl}`);
-          return { success: true, tunnelUrl: existing.tunnelUrl, shortId: existing.shortId, publicUrl, alreadyRunning: true };
+          return { success: true, tunnelUrl: existing.tunnelUrl, shortId: existing.shortId || "", publicUrl, alreadyRunning: true };
         }
-        console.log(`[Tunnel] stale (direct=${directOk} public=${publicOk}), respawn`);
+        console.log(`[Tunnel] stale (direct=${directOk}), respawn`);
       }
     }
 
@@ -66,7 +67,6 @@ export async function enableTunnel(localPort = 20128) {
     const onUrlUpdate = async (url) => {
       if (token.cancelled) return;
       console.log(`[Tunnel] url updated: ${url}`);
-      await registerTunnelUrl(shortId, url);
       saveState({ shortId, tunnelUrl: url });
       await updateSettings({ tunnelEnabled: true, tunnelUrl: url });
     };
@@ -81,20 +81,17 @@ export async function enableTunnel(localPort = 20128) {
     console.log(`[Tunnel] spawned: ${tunnelUrl}`);
     throwIfCancelled(token);
 
-    const publicUrl = `https://r${shortId}.abc-tunnel.us`;
-    await registerTunnelUrl(shortId, tunnelUrl);
+    const publicUrl = tunnelUrl;
     saveState({ shortId, tunnelUrl });
     await updateSettings({ tunnelEnabled: true, tunnelUrl });
-    console.log(`[Tunnel] registered shortId=${shortId} publicUrl=${publicUrl}`);
+    console.log(`[Tunnel] registered Quick Tunnel: ${tunnelUrl}`);
 
-    // Verify publicUrl first (worker route is reliable; direct *.trycloudflare.com DNS may lag)
-    await waitForHealth(publicUrl, token);
-    console.log("[Tunnel] public URL healthy");
-    // Direct tunnel probe is best-effort: DNS for *.trycloudflare.com can be slow/blocked
-    if (!(await probeUrlAlive(tunnelUrl))) {
-      console.warn("[Tunnel] direct URL not reachable yet, continuing via publicUrl");
-    } else {
-      console.log("[Tunnel] direct URL healthy");
+    // Verify tunnel health directly
+    try {
+      await waitForHealth(tunnelUrl, token);
+      console.log("[Tunnel] tunnel URL healthy");
+    } catch (e) {
+      console.warn("[Tunnel] initial probe warm-up:", e.message);
     }
 
     console.log("[Tunnel] enable success");
@@ -134,8 +131,8 @@ export async function getTunnelStatus() {
   const settingsEnabled = settings.tunnelEnabled === true;
   const state = loadState();
   const shortId = state?.shortId || "";
-  const publicUrl = shortId ? `https://r${shortId}.abc-tunnel.us` : "";
   const tunnelUrl = state?.tunnelUrl || "";
+  const publicUrl = tunnelUrl;
 
   // Lazy: skip PID probe entirely when user disabled tunnel
   const running = settingsEnabled ? isCloudflaredRunning() : false;

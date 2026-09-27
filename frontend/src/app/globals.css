@@ -602,3 +602,20 @@ button:disabled,
   border-top: 1px solid var(--color-border);
   margin: 1.5rem 0;
 }
+
+/* Unconditionally hide all Next.js dev overlay, dev tools buttons, and Turbopack widgets */
+[data-nextjs-dev-tools-button],
+[data-nextjs-toast],
+nextjs-portal,
+#nextjs-dev-tools,
+div[data-nextjs-dialog-overlay] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  position: absolute !important;
+  left: -9999px !important;
+}
+

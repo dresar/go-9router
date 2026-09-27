@@ -804,14 +804,6 @@ export default function APIPageClient({ machineId }) {
                 size="sm"
                 icon="cloud_upload"
                 onClick={() => {
-                  if (isLoginUnsafe) {
-                    setTunnelStatus({ type: "error", message: `Security required: ${unsafeReason}` });
-                    return;
-                  }
-                  if (!requireApiKey) {
-                    setTunnelStatus({ type: "error", message: "Security required: Enable \"Require API key\" before activating the tunnel." });
-                    return;
-                  }
                   setShowEnableTunnelModal(true);
                 }}
               >
@@ -891,10 +883,6 @@ export default function APIPageClient({ machineId }) {
                 size="sm"
                 icon="vpn_lock"
                 onClick={() => {
-                  if (isLoginUnsafe) {
-                    setTsStatus({ type: "error", message: `Security required: ${unsafeReason}` });
-                    return;
-                  }
                   handleOpenTsModal();
                 }}
                 className="bg-linear-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white!"
