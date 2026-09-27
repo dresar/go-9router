@@ -135,6 +135,12 @@ func New(h *handlers.Handler, jwtSecret string) http.Handler {
 	mux.HandleFunc("/api/tags", h.HandleTags)
 	mux.HandleFunc("/api/pricing", h.HandlePricing)
 
+	mux.HandleFunc("/api/changelog", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		http.ServeFile(w, r, "CHANGELOG.md")
+	})
+
 	mux.HandleFunc("/api/payments", func(w http.ResponseWriter, r *http.Request) {
 		h.JSON(w, http.StatusOK, map[string]any{"payments": []any{}})
 	})

@@ -15,11 +15,27 @@ export default function ChangelogModal({ isOpen, onClose }) {
     if (!isOpen || html) return;
     setLoading(true);
     setError("");
+
+    const fetchChangelogText = async () => {
+      const sources = [
+        "/api/changelog",
+        "/CHANGELOG.md",
+        GITHUB_CONFIG.changelogUrl,
+      ];
+      for (const url of sources) {
+        try {
+          const res = await fetch(url, { cache: "no-store" });
+          if (res.ok) {
+            const txt = await res.text();
+            if (txt && txt.length > 50) return txt;
+          }
+        } catch {}
+      }
+      throw new Error("Catatan perubahan belum tersedia");
+    };
+
     Promise.all([
-      fetch(GITHUB_CONFIG.changelogUrl).then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.text();
-      }),
+      fetchChangelogText(),
       import("marked"),
     ])
       .then(([md, { marked }]) => {
