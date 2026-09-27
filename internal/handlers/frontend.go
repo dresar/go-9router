@@ -45,8 +45,8 @@ func EnsureNextServer() {
 	}
 
 	cmd := exec.Command(nodeBin, filepath.Base(serverFile))
-	cmd.Dir = standaloneDir
-	cmd.Env = append(os.Environ(), "PORT=20127", "HOSTNAME=0.0.0.0", "NODE_ENV=production")
+	absDataDir, _ := filepath.Abs("data")
+	cmd.Env = append(os.Environ(), "PORT=20127", "HOSTNAME=0.0.0.0", "NODE_ENV=production", "DATA_DIR="+absDataDir)
 	if runtime.GOOS == "windows" {
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			HideWindow:    true,

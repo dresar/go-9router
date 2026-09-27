@@ -13,6 +13,22 @@ const origCreate = http.createServer.bind(http);
 const PEER_TOKEN = crypto.randomBytes(24).toString("hex");
 process.env.NINEROUTER_PEER_TOKEN = PEER_TOKEN;
 
+if (!process.env.DATA_DIR) {
+  const candidates = [
+    path.resolve(__dirname, "..", "data"),
+    path.resolve(__dirname, "..", "..", "data"),
+    path.resolve(__dirname, "data"),
+    path.resolve(process.cwd(), "data"),
+    path.resolve(process.cwd(), "..", "data"),
+  ];
+  for (const cand of candidates) {
+    if (fs.existsSync(path.join(cand, "db.sqlite")) || fs.existsSync(path.join(cand, "db", "data.sqlite"))) {
+      process.env.DATA_DIR = cand;
+      break;
+    }
+  }
+}
+
 let backgroundRefreshStarted = false;
 
 function startBackgroundTokenRefreshFromCustomServer() {

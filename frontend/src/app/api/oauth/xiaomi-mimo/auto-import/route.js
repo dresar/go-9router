@@ -29,11 +29,14 @@ function getCandidatePaths() {
   // MiMoCode / MiMo Desktop shared data dir (cross-platform XDG)
   paths.push(join(home, ".local", "share", "mimocode", "auth.json"));
 
-  // Windows: also check USERPROFILE-based XDG
+  // Windows: check APPDATA, LOCALAPPDATA, and .mimocode
   if (process.platform === "win32") {
     const appData = process.env.APPDATA || join(home, "AppData", "Roaming");
-    // Desktop's own storage (may have separate credentials in the future)
+    const localAppData = process.env.LOCALAPPDATA || join(home, "AppData", "Local");
     paths.push(join(appData, "Xiaomi MiMo", "auth.json"));
+    paths.push(join(appData, "mimocode", "auth.json"));
+    paths.push(join(localAppData, "mimocode", "auth.json"));
+    paths.push(join(home, ".mimocode", "auth.json"));
   }
 
   // macOS

@@ -13,7 +13,20 @@ function defaultDir() {
 
 export function getDataDir() {
   const configured = process.env.DATA_DIR;
-  if (!configured) return defaultDir();
+  if (!configured) {
+    const candidates = [
+      path.resolve(process.cwd(), "data"),
+      path.resolve(process.cwd(), "..", "data"),
+      path.resolve(process.cwd(), "..", "..", "data"),
+      path.resolve(process.cwd(), "..", "..", "..", "data"),
+    ];
+    for (const cand of candidates) {
+      if (fs.existsSync(path.join(cand, "db.sqlite")) || fs.existsSync(path.join(cand, "db", "data.sqlite"))) {
+        return cand;
+      }
+    }
+    return defaultDir();
+  }
 
   // On Windows, ignore Unix-style absolute paths (e.g. /var/lib/...) that come
   // from a Linux-targeted .env or Docker config — they are not valid here.

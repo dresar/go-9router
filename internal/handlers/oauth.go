@@ -39,6 +39,20 @@ func (h *Handler) HandleOAuth(w http.ResponseWriter, r *http.Request) {
 		action = parts[1]
 	}
 
+	// 1. Providers and endpoints with specialized implementations in Next.js frontend:
+	// - xiaomi-mimo: login/start, login/status, auto-import, api-key
+	// - cursor, zed, iflow, kiro, grok-cli, gitlab: auto-import, import, tokens
+	switch provider {
+	case "xiaomi-mimo", "cursor", "zed", "iflow", "kiro", "grok-cli", "gitlab":
+		h.HandleFrontend(w, r)
+		return
+	}
+
+	if provider == "codex" && (action == "bulk-import" || action == "import-token") {
+		h.HandleFrontend(w, r)
+		return
+	}
+
 	switch action {
 	case "authorize":
 		h.handleOAuthAuthorize(w, r, provider)
@@ -56,14 +70,16 @@ func (h *Handler) HandleOAuth(w http.ResponseWriter, r *http.Request) {
 		h.JSON(w, http.StatusOK, map[string]any{"success": true})
 	case "poll-status":
 		h.JSON(w, http.StatusOK, map[string]any{"status": "idle"})
-	case "auto-import":
-		h.JSON(w, http.StatusOK, map[string]any{"found": false, "error": "No local session detected"})
+	case "auto-import", "import", "api-key", "login":
+		// Fallback to Next.js server for provider-specific import/login logic
+		h.HandleFrontend(w, r)
+		return
 	default:
 		if r.Method == http.MethodGet {
 			h.handleOAuthAuthorize(w, r, provider)
 			return
 		}
-		h.JSON(w, http.StatusOK, map[string]any{"success": true})
+		h.HandleFrontend(w, r)
 	}
 }
 
