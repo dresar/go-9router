@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -73,15 +75,46 @@ func (h *Handler) HandleRequestDetails(w http.ResponseWriter, r *http.Request) {
 		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	details, err := repos.ListRequestDetails(h.DB, 50, 0)
+	q := r.URL.Query()
+	page, _ := strconv.Atoi(q.Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	pageSize, _ := strconv.Atoi(q.Get("pageSize"))
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+	offset := (page - 1) * pageSize
+
+	filter := repos.RequestDetailFilter{
+		Provider:  q.Get("provider"),
+		Model:     q.Get("model"),
+		StartDate: q.Get("startDate"),
+		EndDate:   q.Get("endDate"),
+		Limit:     pageSize,
+		Offset:    offset,
+	}
+	details, total, err := repos.ListRequestDetailsFiltered(h.DB, filter)
 	if err != nil {
 		h.JSONError(w, http.StatusInternalServerError, "failed to get request details")
 		return
 	}
-	if details == nil {
-		details = []repos.RequestDetail{}
+	totalPages := 0
+	if total > 0 {
+		totalPages = int(math.Ceil(float64(total) / float64(pageSize)))
 	}
-	h.JSON(w, http.StatusOK, map[string]any{"details": details})
+
+	h.JSON(w, http.StatusOK, map[string]any{
+		"details": details,
+		"pagination": map[string]any{
+			"page":       page,
+			"pageSize":   pageSize,
+			"totalItems": total,
+			"totalPages": totalPages,
+			"hasNext":    page < totalPages,
+			"hasPrev":    page > 1,
+		},
+	})
 }
 
 func (h *Handler) HandleRequestLogs(w http.ResponseWriter, r *http.Request) {

@@ -65,6 +65,20 @@ const nextConfig = {
     };
     return config;
   },
+  async redirects() {
+    return [
+      {
+        source: "/dashboard",
+        destination: "/endpoint",
+        permanent: false,
+      },
+      {
+        source: "/dashboard/:path((?!chat).*)",
+        destination: "/:path",
+        permanent: false,
+      },
+    ];
+  },
   async rewrites() {
     const goBackend = process.env.GO_BACKEND_URL || "http://127.0.0.1:20128";
     return [
@@ -83,6 +97,122 @@ const nextConfig = {
       {
         source: "/codex/:path*",
         destination: `${goBackend}/codex/:path*`
+      },
+      {
+        source: "/skills",
+        destination: "/dashboard/skills"
+      },
+      {
+        source: "/skills/:path*",
+        destination: "/dashboard/skills/:path*"
+      },
+      {
+        source: "/providers",
+        destination: "/dashboard/providers"
+      },
+      {
+        source: "/providers/:path*",
+        destination: "/dashboard/providers/:path*"
+      },
+      {
+        source: "/combos",
+        destination: "/dashboard/combos"
+      },
+      {
+        source: "/combos/:path*",
+        destination: "/dashboard/combos/:path*"
+      },
+      {
+        source: "/proxy-pools",
+        destination: "/dashboard/proxy-pools"
+      },
+      {
+        source: "/proxy-pools/:path*",
+        destination: "/dashboard/proxy-pools/:path*"
+      },
+      {
+        source: "/endpoint",
+        destination: "/dashboard/endpoint"
+      },
+      {
+        source: "/endpoint/:path*",
+        destination: "/dashboard/endpoint/:path*"
+      },
+      {
+        source: "/usage",
+        destination: "/dashboard/usage"
+      },
+      {
+        source: "/usage/:path*",
+        destination: "/dashboard/usage/:path*"
+      },
+      {
+        source: "/quota",
+        destination: "/dashboard/quota"
+      },
+      {
+        source: "/quota/:path*",
+        destination: "/dashboard/quota/:path*"
+      },
+      {
+        source: "/profile",
+        destination: "/dashboard/profile"
+      },
+      {
+        source: "/profile/:path*",
+        destination: "/dashboard/profile/:path*"
+      },
+      {
+        source: "/console-log",
+        destination: "/dashboard/console-log"
+      },
+      {
+        source: "/console-log/:path*",
+        destination: "/dashboard/console-log/:path*"
+      },
+      {
+        source: "/cli-tools",
+        destination: "/dashboard/cli-tools"
+      },
+      {
+        source: "/cli-tools/:path*",
+        destination: "/dashboard/cli-tools/:path*"
+      },
+      {
+        source: "/token-saver",
+        destination: "/dashboard/token-saver"
+      },
+      {
+        source: "/token-saver/:path*",
+        destination: "/dashboard/token-saver/:path*"
+      },
+      {
+        source: "/translator",
+        destination: "/dashboard/translator"
+      },
+      {
+        source: "/translator/:path*",
+        destination: "/dashboard/translator/:path*"
+      },
+      {
+        source: "/media-providers",
+        destination: "/dashboard/media-providers"
+      },
+      {
+        source: "/media-providers/:path*",
+        destination: "/dashboard/media-providers/:path*"
+      },
+      {
+        source: "/basic-chat",
+        destination: "/dashboard/basic-chat"
+      },
+      {
+        source: "/mitm",
+        destination: "/dashboard/mitm"
+      },
+      {
+        source: "/pxpipe",
+        destination: "/dashboard/pxpipe"
       }
     ];
   }

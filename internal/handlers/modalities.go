@@ -50,6 +50,7 @@ func (h *Handler) HandleEmbeddings(w http.ResponseWriter, r *http.Request) {
 		h.JSONError(w, http.StatusNotFound, fmt.Sprintf("no active credentials for provider: %s", providerID))
 		return
 	}
+	defer providers.RecordConnectionEnd(sel.Credentials.ConnectionID)
 
 	body["model"] = modelID
 	data, _ := json.Marshal(body)
@@ -121,6 +122,7 @@ func (h *Handler) HandleImagesGenerations(w http.ResponseWriter, r *http.Request
 		h.JSONError(w, http.StatusNotFound, fmt.Sprintf("no active credentials for provider: %s", providerID))
 		return
 	}
+	defer providers.RecordConnectionEnd(sel.Credentials.ConnectionID)
 
 	body["model"] = modelID
 	data, _ := json.Marshal(body)
@@ -400,6 +402,7 @@ func (h *Handler) HandleVideoGenerations(w http.ResponseWriter, r *http.Request)
 		h.JSONError(w, http.StatusNotFound, "no active credentials for xai provider")
 		return
 	}
+	defer providers.RecordConnectionEnd(sel.Credentials.ConnectionID)
 
 	baseURL := sel.Credentials.BaseURL
 	if baseURL == "" {
@@ -443,6 +446,7 @@ func (h *Handler) HandleVideoStatus(w http.ResponseWriter, r *http.Request) {
 		h.JSONError(w, http.StatusNotFound, "no active credentials for xai provider")
 		return
 	}
+	defer providers.RecordConnectionEnd(sel.Credentials.ConnectionID)
 
 	baseURL := sel.Credentials.BaseURL
 	if baseURL == "" {

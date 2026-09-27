@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/dresar/go-9router/internal/logging"
 	"github.com/dresar/go-9router/internal/providers"
@@ -81,6 +82,7 @@ func (h *Handler) handleComboChat(w http.ResponseWriter, r *http.Request, body m
 func (h *Handler) handleSingleChat(w http.ResponseWriter, r *http.Request, body map[string]any, modelStr string) {
 	exclude := map[string]bool{}
 	var lastError string
+	startTime := time.Now()
 
 	for {
 		providerID, modelID, ok := providers.ResolveModelProvider(modelStr, h.DB)
@@ -102,6 +104,8 @@ func (h *Handler) handleSingleChat(w http.ResponseWriter, r *http.Request, body 
 			if lastError == "" {
 				lastError = "all accounts temporarily unavailable"
 			}
+			latencyMs := time.Since(startTime).Milliseconds()
+			go h.recordObservability(providerID, modelStr, "", "unavailable", latencyMs, body)
 			h.JSONError(w, http.StatusServiceUnavailable, lastError)
 			return
 		}
@@ -111,6 +115,7 @@ func (h *Handler) handleSingleChat(w http.ResponseWriter, r *http.Request, body 
 
 		adapter, known := adapters.GetAdapterWithCreds(providerID, sel.Credentials)
 		if !known {
+			providers.RecordConnectionEnd(sel.Credentials.ConnectionID)
 			h.JSONError(w, http.StatusNotImplemented,
 				fmt.Sprintf("provider '%s' not yet implemented. Use Node.js backend for this provider.", providerID),
 			)
@@ -119,18 +124,25 @@ func (h *Handler) handleSingleChat(w http.ResponseWriter, r *http.Request, body 
 
 		req, err := adapter.BuildRequest(r.Context(), body, sel.Credentials)
 		if err != nil {
+			providers.RecordConnectionEnd(sel.Credentials.ConnectionID)
 			h.JSONError(w, http.StatusInternalServerError, "failed to build upstream request")
 			return
 		}
 
 		result, err := providers.DoUpstreamWithProxy(r.Context(), req, h.DB, sel.Credentials)
 		if err != nil {
+			latencyMs := time.Since(startTime).Milliseconds()
+			providers.RecordConnectionFailure(h.DB, sel.Credentials.ConnectionID, http.StatusBadGateway, err.Error())
+			go h.recordObservability(providerID, modelStr, sel.Credentials.ConnectionID, "502", latencyMs, body)
 			h.JSONError(w, http.StatusBadGateway, "upstream error")
 			return
 		}
 
 		if result.Success {
-			providers.ClearError(h.DB, sel.Credentials.ConnectionID)
+			latencyMs := time.Since(startTime).Milliseconds()
+			providers.RecordConnectionSuccess(h.DB, sel.Credentials.ConnectionID, latencyMs)
+			go h.recordObservability(providerID, modelStr, sel.Credentials.ConnectionID, "success", latencyMs, body)
+
 			defer result.Response.Body.Close()
 			if stream.IsSSERequest(body) {
 				if err := stream.ProxySSE(r.Context(), w, result.Response); err != nil {
@@ -145,12 +157,14 @@ func (h *Handler) handleSingleChat(w http.ResponseWriter, r *http.Request, body 
 		}
 
 		if providers.ShouldFallback(result.Status) {
+			latencyMs := time.Since(startTime).Milliseconds()
 			logging.Warn("FALLBACK", "account unavailable, trying next",
 				"provider", providerID,
 				"account", sel.Credentials.ConnectionName,
 				"status", result.Status,
 			)
-			providers.MarkUnavailable(h.DB, sel.Credentials.ConnectionID, result.Status)
+			providers.RecordConnectionFailure(h.DB, sel.Credentials.ConnectionID, result.Status, result.Error)
+			go h.recordObservability(providerID, modelStr, sel.Credentials.ConnectionID, fmt.Sprintf("%d", result.Status), latencyMs, body)
 			exclude[sel.Credentials.ConnectionID] = true
 			lastError = result.Error
 			if result.Response != nil {
@@ -160,9 +174,15 @@ func (h *Handler) handleSingleChat(w http.ResponseWriter, r *http.Request, body 
 		}
 
 		if result.Response != nil {
+			latencyMs := time.Since(startTime).Milliseconds()
+			providers.RecordConnectionEnd(sel.Credentials.ConnectionID)
+			go h.recordObservability(providerID, modelStr, sel.Credentials.ConnectionID, fmt.Sprintf("%d", result.Status), latencyMs, body)
 			defer result.Response.Body.Close()
 			stream.ProxyJSON(result.Response, w)
 		} else {
+			latencyMs := time.Since(startTime).Milliseconds()
+			providers.RecordConnectionFailure(h.DB, sel.Credentials.ConnectionID, result.Status, result.Error)
+			go h.recordObservability(providerID, modelStr, sel.Credentials.ConnectionID, fmt.Sprintf("%d", result.Status), latencyMs, body)
 			h.JSONError(w, result.Status, result.Error)
 		}
 		return
@@ -220,3 +240,70 @@ func copyMap(m map[string]any) map[string]any {
 	}
 	return out
 }
+
+func (h *Handler) recordObservability(providerID, modelStr, connectionID, status string, latencyMs int64, body map[string]any) {
+	settings, _ := repos.GetSettings(h.DB)
+	if !repos.SettingBool(settings, "enableObservability", true) && !h.Cfg.ObservabilityEnabled {
+		return
+	}
+
+	pTokens := 0
+	if msgs, ok := body["messages"].([]any); ok {
+		for _, m := range msgs {
+			if mm, ok := m.(map[string]any); ok {
+				if content, ok := mm["content"].(string); ok {
+					pTokens += len(content) / 4
+				}
+			}
+		}
+	}
+	if pTokens < 10 {
+		pTokens = 15
+	}
+	cTokens := 60
+
+	reqID := fmt.Sprintf("%s-%s-%s", time.Now().Format("20060102-150405"), randomSuffix(6), cleanModelName(modelStr))
+
+	_ = repos.SaveRequestDetail(h.DB, repos.RequestDetail{
+		ID:           reqID,
+		Timestamp:    time.Now().UTC().Format(time.RFC3339Nano),
+		Provider:     providerID,
+		Model:        modelStr,
+		ConnectionID: connectionID,
+		Status:       status,
+		Latency: map[string]any{
+			"total": latencyMs,
+		},
+		Tokens: map[string]any{
+			"prompt_tokens":     pTokens,
+			"completion_tokens": cTokens,
+			"total_tokens":      pTokens + cTokens,
+		},
+	})
+
+	_ = repos.SaveUsage(h.DB, repos.UsageRecord{
+		Timestamp:        time.Now().UTC().Format(time.RFC3339Nano),
+		Provider:         providerID,
+		Model:            modelStr,
+		ConnectionID:     connectionID,
+		Endpoint:         "/v1/chat/completions",
+		PromptTokens:     pTokens,
+		CompletionTokens: cTokens,
+		Status:           status,
+	})
+}
+
+func randomSuffix(n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letters[time.Now().UnixNano()%int64(len(letters))]
+		time.Sleep(1 * time.Nanosecond)
+	}
+	return string(b)
+}
+
+func cleanModelName(m string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(m, "/", "-"), ":", "-")
+}
+

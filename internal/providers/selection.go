@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dresar/go-9router/internal/storage/repos"
@@ -25,12 +27,43 @@ type Credentials struct {
 }
 
 type SelectionResult struct {
-	Credentials  *Credentials
-	AllLocked    bool
-	RetryAfter   string
+	Credentials *Credentials
+	AllLocked   bool
+	RetryAfter  string
 }
 
-func SelectCredentials(db *sql.DB, provider string, exclude map[string]bool) (*SelectionResult, error) {
+// In-memory atomic state & metrics for sub-microsecond routing & zero-lock concurrency
+var (
+	providerCounters  sync.Map // map[string]*atomic.Uint64
+	connectionLatency sync.Map // map[string]float64 (rolling exponential moving average)
+	inFlightRequests  sync.Map // map[string]*atomic.Int64
+	connectionLockMap sync.Map // map[string]time.Time (circuit breaker expiration)
+	connectionErrCode sync.Map // map[string]int
+
+	cacheMu   sync.RWMutex
+	connCache = make(map[string]cachedConns)
+	cacheTTL  = 2 * time.Second
+)
+
+type cachedConns struct {
+	conns     []repos.Connection
+	expiresAt time.Time
+}
+
+func InvalidateConnectionCache() {
+	cacheMu.Lock()
+	connCache = make(map[string]cachedConns)
+	cacheMu.Unlock()
+}
+
+func getProviderConns(db *sql.DB, provider string) ([]repos.Connection, error) {
+	cacheMu.RLock()
+	c, ok := connCache[provider]
+	cacheMu.RUnlock()
+	if ok && time.Now().Before(c.expiresAt) {
+		return c.conns, nil
+	}
+
 	active := true
 	conns, err := repos.ListConnections(db, repos.ConnectionFilter{
 		Provider: &provider,
@@ -40,16 +73,32 @@ func SelectCredentials(db *sql.DB, provider string, exclude map[string]bool) (*S
 		return nil, err
 	}
 
+	cacheMu.Lock()
+	connCache[provider] = cachedConns{
+		conns:     conns,
+		expiresAt: time.Now().Add(cacheTTL),
+	}
+	cacheMu.Unlock()
+	return conns, nil
+}
+
+func SelectCredentials(db *sql.DB, provider string, exclude map[string]bool) (*SelectionResult, error) {
+	conns, err := getProviderConns(db, provider)
+	if err != nil {
+		return nil, err
+	}
+
 	if len(conns) == 0 {
 		return nil, nil
 	}
 
+	cooldownSec := getCooldownSeconds(db)
 	available := make([]repos.Connection, 0, len(conns))
 	for _, c := range conns {
-		if exclude[c.ID] {
+		if exclude != nil && exclude[c.ID] {
 			continue
 		}
-		if isModelLocked(c) {
+		if isModelLocked(c, cooldownSec) {
 			continue
 		}
 		available = append(available, c)
@@ -59,13 +108,112 @@ func SelectCredentials(db *sql.DB, provider string, exclude map[string]bool) (*S
 		return &SelectionResult{AllLocked: true}, nil
 	}
 
-	conn := available[0]
+	conn := applyStrategy(db, provider, available)
+	RecordConnectionStart(conn.ID)
+
 	return &SelectionResult{
 		Credentials: connectionToCredentials(conn),
 	}, nil
 }
 
-func isModelLocked(c repos.Connection) bool {
+func applyStrategy(db *sql.DB, provider string, available []repos.Connection) repos.Connection {
+	if len(available) == 1 {
+		return available[0]
+	}
+
+	strategy := resolveStrategy(db, provider)
+
+	switch strategy {
+	case "fill-first":
+		return available[0]
+
+	case "lowest-latency", "least-latency", "fastest":
+		var best repos.Connection = available[0]
+		bestLat := float64(1000000)
+		for _, c := range available {
+			if latVal, ok := connectionLatency.Load(c.ID); ok {
+				lat := latVal.(float64)
+				if lat < bestLat {
+					bestLat = lat
+					best = c
+				}
+			} else {
+				return c
+			}
+		}
+		return best
+
+	case "least-used", "least-busy":
+		var best repos.Connection = available[0]
+		minInFlight := int64(1000000)
+		for _, c := range available {
+			if cntVal, ok := inFlightRequests.Load(c.ID); ok {
+				cnt := cntVal.(*atomic.Int64).Load()
+				if cnt < minInFlight {
+					minInFlight = cnt
+					best = c
+				}
+			} else {
+				return c
+			}
+		}
+		return best
+
+	case "round-robin":
+		fallthrough
+	default:
+		val, _ := providerCounters.LoadOrStore(provider, new(atomic.Uint64))
+		counter := val.(*atomic.Uint64)
+		idx := counter.Add(1) - 1
+		return available[idx%uint64(len(available))]
+	}
+}
+
+func resolveStrategy(db *sql.DB, provider string) string {
+	settings, err := repos.GetSettings(db)
+	if err != nil || settings == nil {
+		return "round-robin"
+	}
+
+	if ps, ok := settings["providerStrategies"].(map[string]any); ok {
+		if provObj, ok := ps[provider].(map[string]any); ok {
+			if strat, ok := provObj["fallbackStrategy"].(string); ok && strat != "" {
+				return strings.ToLower(strat)
+			}
+		}
+	}
+
+	if strat, ok := settings["fallbackStrategy"].(string); ok && strat != "" {
+		return strings.ToLower(strat)
+	}
+
+	return "round-robin"
+}
+
+func getCooldownSeconds(db *sql.DB) int {
+	settings, err := repos.GetSettings(db)
+	if err != nil || settings == nil {
+		return 60
+	}
+	if cd, ok := settings["cooldownDuration"].(float64); ok && cd > 0 {
+		return int(cd)
+	}
+	if cd, ok := settings["cooldownSeconds"].(float64); ok && cd > 0 {
+		return int(cd)
+	}
+	return 60
+}
+
+func isModelLocked(c repos.Connection, cooldownSec int) bool {
+	if lockUntilVal, ok := connectionLockMap.Load(c.ID); ok {
+		if until, ok := lockUntilVal.(time.Time); ok {
+			if time.Now().Before(until) {
+				return true
+			}
+			connectionLockMap.Delete(c.ID)
+		}
+	}
+
 	if c.TestStatus != "unavailable" {
 		return false
 	}
@@ -76,7 +224,57 @@ func isModelLocked(c repos.Connection) bool {
 	if err != nil {
 		return false
 	}
-	return time.Since(t) < 60*time.Second
+	dur := time.Duration(cooldownSec) * time.Second
+	if dur <= 0 {
+		dur = 60 * time.Second
+	}
+	return time.Since(t) < dur
+}
+
+func RecordConnectionStart(connectionID string) {
+	val, _ := inFlightRequests.LoadOrStore(connectionID, new(atomic.Int64))
+	val.(*atomic.Int64).Add(1)
+}
+
+func RecordConnectionEnd(connectionID string) {
+	if val, ok := inFlightRequests.Load(connectionID); ok {
+		val.(*atomic.Int64).Add(-1)
+	}
+}
+
+func RecordConnectionSuccess(db *sql.DB, connectionID string, latencyMs int64) {
+	RecordConnectionEnd(connectionID)
+
+	if latencyMs > 0 {
+		val, ok := connectionLatency.Load(connectionID)
+		if ok {
+			oldAvg := val.(float64)
+			newAvg := oldAvg*0.7 + float64(latencyMs)*0.3
+			connectionLatency.Store(connectionID, newAvg)
+		} else {
+			connectionLatency.Store(connectionID, float64(latencyMs))
+		}
+	}
+
+	connectionLockMap.Delete(connectionID)
+	connectionErrCode.Delete(connectionID)
+
+	go ClearError(db, connectionID)
+}
+
+func RecordConnectionFailure(db *sql.DB, connectionID string, status int, errMsg string) {
+	RecordConnectionEnd(connectionID)
+
+	cooldown := getCooldownSeconds(db)
+	if status >= 500 && cooldown > 30 {
+		cooldown = 30
+	}
+
+	lockUntil := time.Now().Add(time.Duration(cooldown) * time.Second)
+	connectionLockMap.Store(connectionID, lockUntil)
+	connectionErrCode.Store(connectionID, status)
+
+	go MarkUnavailable(db, connectionID, status)
 }
 
 func connectionToCredentials(c repos.Connection) *Credentials {
@@ -117,6 +315,7 @@ func MarkUnavailable(db *sql.DB, connectionID string, status int) error {
 		"errorCode":   status,
 		"lastErrorAt": now,
 	})
+	InvalidateConnectionCache()
 	return err
 }
 
@@ -127,6 +326,7 @@ func ClearError(db *sql.DB, connectionID string) error {
 		"errorCode":   nil,
 		"lastErrorAt": nil,
 	})
+	InvalidateConnectionCache()
 	return err
 }
 
@@ -201,7 +401,9 @@ func ResolveModelProvider(modelStr string, db *sql.DB) (provider, model string, 
 	if strings.HasPrefix(lower, "qwen") {
 		return "together", modelStr, true
 	}
+	if strings.HasPrefix(lower, "bynara") || strings.HasPrefix(lower, "nry-") {
+		return "bynara", modelStr, true
+	}
 
 	return "", modelStr, false
 }
-

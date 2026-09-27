@@ -131,7 +131,7 @@ Options:
 	if lanIP != "" && hostStr == "0.0.0.0" {
 		fmt.Printf("🌐 LAN Address:     http://%s:%d\n", lanIP, portNum)
 	}
-	fmt.Printf("🚀 Local Dashboard: http://%s:%d/dashboard\n", displayHost, portNum)
+	fmt.Printf("🚀 Web Dashboard:   http://%s:%d/endpoint\n", displayHost, portNum)
 	fmt.Printf("🔌 API Endpoint:    http://%s:%d/v1\n\n", displayHost, portNum)
 
 	db, err := storage.Open(cfg.DataDir)

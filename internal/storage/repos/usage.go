@@ -134,20 +134,75 @@ func GetUsageStats(db *sql.DB) (*UsageStats, error) {
 }
 
 type RequestDetail struct {
-	ID           string         `json:"id"`
-	Timestamp    string         `json:"timestamp"`
-	Provider     string         `json:"provider,omitempty"`
-	Model        string         `json:"model,omitempty"`
-	ConnectionID string         `json:"connectionId,omitempty"`
-	Status       string         `json:"status,omitempty"`
-	Data         map[string]any `json:"data,omitempty"`
+	ID               string         `json:"id"`
+	Timestamp        string         `json:"timestamp"`
+	Provider         string         `json:"provider,omitempty"`
+	Model            string         `json:"model,omitempty"`
+	ConnectionID     string         `json:"connectionId,omitempty"`
+	Status           string         `json:"status,omitempty"`
+	Latency          map[string]any `json:"latency,omitempty"`
+	Tokens           map[string]any `json:"tokens,omitempty"`
+	Request          any            `json:"request,omitempty"`
+	ProviderRequest  any            `json:"providerRequest,omitempty"`
+	ProviderResponse any            `json:"providerResponse,omitempty"`
+	Response         any            `json:"response,omitempty"`
+	Data             map[string]any `json:"data,omitempty"`
+}
+
+type RequestDetailFilter struct {
+	Provider     string
+	Model        string
+	ConnectionID string
+	Status       string
+	StartDate    string
+	EndDate      string
+	Limit        int
+	Offset       int
 }
 
 func SaveRequestDetail(db *sql.DB, d RequestDetail) error {
 	if d.Timestamp == "" {
 		d.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
 	}
-	b, _ := json.Marshal(d.Data)
+	m := make(map[string]any)
+	if d.Data != nil {
+		for k, v := range d.Data {
+			m[k] = v
+		}
+	}
+	m["id"] = d.ID
+	m["timestamp"] = d.Timestamp
+	if d.Provider != "" {
+		m["provider"] = d.Provider
+	}
+	if d.Model != "" {
+		m["model"] = d.Model
+	}
+	if d.ConnectionID != "" {
+		m["connectionId"] = d.ConnectionID
+	}
+	if d.Status != "" {
+		m["status"] = d.Status
+	}
+	if d.Latency != nil {
+		m["latency"] = d.Latency
+	}
+	if d.Tokens != nil {
+		m["tokens"] = d.Tokens
+	}
+	if d.Request != nil {
+		m["request"] = d.Request
+	}
+	if d.ProviderRequest != nil {
+		m["providerRequest"] = d.ProviderRequest
+	}
+	if d.ProviderResponse != nil {
+		m["providerResponse"] = d.ProviderResponse
+	}
+	if d.Response != nil {
+		m["response"] = d.Response
+	}
+	b, _ := json.Marshal(m)
 	_, err := db.Exec(
 		`INSERT OR REPLACE INTO requestDetails(id, timestamp, provider, model, connectionId, status, data) VALUES(?,?,?,?,?,?,?)`,
 		d.ID, d.Timestamp, nvl(d.Provider), nvl(d.Model), nvl(d.ConnectionID), nvl(d.Status), string(b),
@@ -155,32 +210,75 @@ func SaveRequestDetail(db *sql.DB, d RequestDetail) error {
 	return err
 }
 
-func ListRequestDetails(db *sql.DB, limit, offset int) ([]RequestDetail, error) {
+func ListRequestDetailsFiltered(db *sql.DB, f RequestDetailFilter) ([]map[string]any, int, error) {
+	limit := f.Limit
 	if limit <= 0 {
 		limit = 50
 	}
-	rows, err := db.Query(
-		`SELECT id, timestamp, provider, model, connectionId, status, data FROM requestDetails ORDER BY timestamp DESC LIMIT ? OFFSET ?`,
-		limit, offset,
-	)
+	q := `SELECT data FROM requestDetails WHERE 1=1`
+	cq := `SELECT COUNT(*) FROM requestDetails WHERE 1=1`
+	args := []any{}
+	if f.Provider != "" {
+		q += ` AND provider = ?`
+		cq += ` AND provider = ?`
+		args = append(args, f.Provider)
+	}
+	if f.Model != "" {
+		q += ` AND model = ?`
+		cq += ` AND model = ?`
+		args = append(args, f.Model)
+	}
+	if f.ConnectionID != "" {
+		q += ` AND connectionId = ?`
+		cq += ` AND connectionId = ?`
+		args = append(args, f.ConnectionID)
+	}
+	if f.Status != "" {
+		q += ` AND status = ?`
+		cq += ` AND status = ?`
+		args = append(args, f.Status)
+	}
+	if f.StartDate != "" {
+		q += ` AND timestamp >= ?`
+		cq += ` AND timestamp >= ?`
+		args = append(args, f.StartDate)
+	}
+	if f.EndDate != "" {
+		q += ` AND timestamp <= ?`
+		cq += ` AND timestamp <= ?`
+		args = append(args, f.EndDate)
+	}
+
+	var total int
+	_ = db.QueryRow(cq, args...).Scan(&total)
+
+	q += ` ORDER BY timestamp DESC LIMIT ? OFFSET ?`
+	args = append(args, limit, f.Offset)
+
+	rows, err := db.Query(q, args...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
-	var out []RequestDetail
+
+	var out []map[string]any
 	for rows.Next() {
-		var d RequestDetail
-		var provider, model, connID, status sql.NullString
 		var dataStr string
-		if err := rows.Scan(&d.ID, &d.Timestamp, &provider, &model, &connID, &status, &dataStr); err != nil {
-			return nil, err
+		if err := rows.Scan(&dataStr); err != nil {
+			continue
 		}
-		d.Provider = provider.String
-		d.Model = model.String
-		d.ConnectionID = connID.String
-		d.Status = status.String
-		_ = json.Unmarshal([]byte(dataStr), &d.Data)
-		out = append(out, d)
+		var item map[string]any
+		if err := json.Unmarshal([]byte(dataStr), &item); err == nil {
+			out = append(out, item)
+		}
 	}
-	return out, rows.Err()
+	if out == nil {
+		out = []map[string]any{}
+	}
+	return out, total, rows.Err()
+}
+
+func ListRequestDetails(db *sql.DB, limit, offset int) ([]map[string]any, error) {
+	details, _, err := ListRequestDetailsFiltered(db, RequestDetailFilter{Limit: limit, Offset: offset})
+	return details, err
 }

@@ -13,13 +13,32 @@ function getLocaleFromCookie() {
   return normalizeLocale(value);
 }
 
-const getLocaleInfo = (locale) => {
-  const locales = {
-    "id": { name: "Bahasa Indonesia", flag: "🇮🇩" },
-    "en": { name: "English", flag: "🇺🇸" },
-  };
-  return locales[locale] || { name: locale, flag: "🌐" };
-};
+function FlagID() {
+  return (
+    <svg width="18" height="13" viewBox="0 0 16 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="rounded-[2px] overflow-hidden shrink-0 shadow-[0_0_0_1px_rgba(0,0,0,0.18)]">
+      <rect width="16" height="6" fill="#EF4444" />
+      <rect y="6" width="16" height="6" fill="#FFFFFF" />
+    </svg>
+  );
+}
+
+function FlagEN() {
+  return (
+    <svg width="18" height="13" viewBox="0 0 16 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="rounded-[2px] overflow-hidden shrink-0 shadow-[0_0_0_1px_rgba(0,0,0,0.18)]">
+      <rect width="16" height="12" fill="#FFFFFF" />
+      <rect width="16" height="1.85" fill="#DC2626" />
+      <rect y="3.69" width="16" height="1.85" fill="#DC2626" />
+      <rect y="7.38" width="16" height="1.85" fill="#DC2626" />
+      <rect y="10.15" width="16" height="1.85" fill="#DC2626" />
+      <rect width="7.5" height="6.5" fill="#1D4ED8" />
+      <circle cx="2.2" cy="2" r="0.6" fill="#FFFFFF" />
+      <circle cx="5.3" cy="2" r="0.6" fill="#FFFFFF" />
+      <circle cx="3.75" cy="3.5" r="0.6" fill="#FFFFFF" />
+      <circle cx="2.2" cy="5" r="0.6" fill="#FFFFFF" />
+      <circle cx="5.3" cy="5" r="0.6" fill="#FFFFFF" />
+    </svg>
+  );
+}
 
 export default function LanguageSwitcher({ className = "", isOpen, onClose, hideTrigger = false }) {
   const [locale, setLocale] = useState("id");
@@ -52,23 +71,24 @@ export default function LanguageSwitcher({ className = "", isOpen, onClose, hide
   if (hideTrigger && !isOpen) return null;
 
   return (
-    <div className={`flex items-center gap-1 ${className}`} data-i18n-skip="true">
+    <div className={`flex items-center gap-1.5 ${className}`} data-i18n-skip="true">
       {LOCALES.map((item) => {
         const active = locale === item;
-        const info = getLocaleInfo(item);
+        const name = item === "id" ? "Bahasa Indonesia" : "English";
         return (
           <button
             key={item}
+            type="button"
             onClick={() => handleSetLocale(item)}
             disabled={isPending}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all duration-200 active:scale-[0.98] ${
               active
-                ? "bg-primary text-white"
+                ? "bg-primary text-white shadow-xs"
                 : "text-text-muted hover:text-text-main hover:bg-black/5 dark:hover:bg-white/5"
-            }`}
+            } ${isPending ? "opacity-60 cursor-wait" : ""}`}
           >
-            <span>{info.flag}</span>
-            <span>{info.name}</span>
+            {item === "id" ? <FlagID /> : <FlagEN />}
+            <span>{name}</span>
           </button>
         );
       })}

@@ -847,16 +847,89 @@ export default function ProfilePage() {
             <div className="size-10 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
               <span className="material-symbols-outlined text-[20px]">language</span>
             </div>
-            <h3 className="text-base sm:text-lg font-semibold">Language</h3>
+            <div>
+              <h3 className="text-base sm:text-lg font-semibold">Language</h3>
+              <p className="text-xs text-text-muted mt-0.5">Display language</p>
+            </div>
           </div>
-          <button
-            onClick={() => setLangOpen(true)}
-            className="flex items-center justify-between w-full p-3 rounded-lg bg-bg border border-border hover:border-primary/50 transition-colors"
-            data-i18n-skip="true"
-          >
-            <span className="text-sm text-text-muted">Display language</span>
-            <span className="text-2xl">{LOCALE_FLAGS[locale] || "🌐"}</span>
-          </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-i18n-skip="true">
+            <button
+              type="button"
+              onClick={async () => {
+                if (locale === "id") return;
+                await fetch("/api/locale", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ locale: "id" }),
+                });
+                const { reloadTranslations } = await import("@/i18n/runtime");
+                await reloadTranslations();
+                setLocale("id");
+              }}
+              className={`flex items-center justify-between p-3.5 rounded-lg border transition-all cursor-pointer active:scale-[0.99] ${
+                locale === "id"
+                  ? "border-primary bg-primary/5 text-primary shadow-xs ring-1 ring-primary/20"
+                  : "border-border bg-bg hover:border-text-muted/40 text-text-main"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <svg width="20" height="15" viewBox="0 0 16 12" fill="none" className="rounded-[2px] overflow-hidden shadow-[0_0_0_1px_rgba(0,0,0,0.18)] shrink-0">
+                  <rect width="16" height="6" fill="#EF4444" />
+                  <rect y="6" width="16" height="6" fill="#FFFFFF" />
+                </svg>
+                <div className="text-left">
+                  <div className="text-xs font-semibold">Bahasa Indonesia</div>
+                  <div className="text-[11px] text-text-muted">Indonesia (ID)</div>
+                </div>
+              </div>
+              {locale === "id" && (
+                <span className="material-symbols-outlined text-primary text-[18px]">check_circle</span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={async () => {
+                if (locale === "en") return;
+                await fetch("/api/locale", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ locale: "en" }),
+                });
+                const { reloadTranslations } = await import("@/i18n/runtime");
+                await reloadTranslations();
+                setLocale("en");
+              }}
+              className={`flex items-center justify-between p-3.5 rounded-lg border transition-all cursor-pointer active:scale-[0.99] ${
+                locale === "en"
+                  ? "border-primary bg-primary/5 text-primary shadow-xs ring-1 ring-primary/20"
+                  : "border-border bg-bg hover:border-text-muted/40 text-text-main"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <svg width="20" height="15" viewBox="0 0 16 12" fill="none" className="rounded-[2px] overflow-hidden shadow-[0_0_0_1px_rgba(0,0,0,0.18)] shrink-0">
+                  <rect width="16" height="12" fill="#FFFFFF" />
+                  <rect width="16" height="1.85" fill="#DC2626" />
+                  <rect y="3.69" width="16" height="1.85" fill="#DC2626" />
+                  <rect y="7.38" width="16" height="1.85" fill="#DC2626" />
+                  <rect y="10.15" width="16" height="1.85" fill="#DC2626" />
+                  <rect width="7.5" height="6.5" fill="#1D4ED8" />
+                  <circle cx="2.2" cy="2" r="0.6" fill="#FFFFFF" />
+                  <circle cx="5.3" cy="2" r="0.6" fill="#FFFFFF" />
+                  <circle cx="3.75" cy="3.5" r="0.6" fill="#FFFFFF" />
+                  <circle cx="2.2" cy="5" r="0.6" fill="#FFFFFF" />
+                  <circle cx="5.3" cy="5" r="0.6" fill="#FFFFFF" />
+                </svg>
+                <div className="text-left">
+                  <div className="text-xs font-semibold">English</div>
+                  <div className="text-[11px] text-text-muted">United States (EN)</div>
+                </div>
+              </div>
+              {locale === "en" && (
+                <span className="material-symbols-outlined text-primary text-[18px]">check_circle</span>
+              )}
+            </button>
+          </div>
         </Card>
 
         {/* Security */}

@@ -14,29 +14,29 @@ import { ConfirmModal } from "./Modal";
 
 // const VISIBLE_MEDIA_KINDS = ["embedding", "image", "imageToText", "tts", "stt", "webSearch", "webFetch", "video", "music"];
 const VISIBLE_MEDIA_KINDS = ["embedding", "image", "video", "tts", "stt", "systemone"];
-// Combined entry: webSearch + webFetch share one page at /dashboard/media-providers/web
-const COMBINED_WEB_ITEM = { id: "web", label: "Web Fetch & Search", icon: "travel_explore", href: "/dashboard/media-providers/web" };
+// Combined entry: webSearch + webFetch share one page at /media-providers/web
+const COMBINED_WEB_ITEM = { id: "web", label: "Web Fetch & Search", icon: "travel_explore", href: "/media-providers/web" };
 
 const navItems = [
-  { href: "/dashboard/endpoint", label: "Endpoint & Key", icon: "api" },
-  { href: "/dashboard/providers", label: "Providers", icon: "dns" },
-  // { href: "/dashboard/basic-chat", label: "Basic Chat", icon: "chat" }, // Hidden
-  { href: "/dashboard/combos", label: "Combo & Vision Adapter", icon: "layers" },
-  { href: "/dashboard/usage", label: "Usage", icon: "bar_chart" },
-  { href: "/dashboard/quota", label: "Quota Tracker", icon: "data_usage" },
-  { href: "/dashboard/token-saver", label: "Token Saver", icon: "savings" },
-  // { href: "/dashboard/pxpipe", label: "PXPIPE", icon: "image" },
-  { href: "/dashboard/cli-tools", label: "CLI Tools", icon: "terminal" },
+  { href: "/endpoint", label: "Endpoint & Key", icon: "api" },
+  { href: "/providers", label: "Providers", icon: "dns" },
+  // { href: "/basic-chat", label: "Basic Chat", icon: "chat" }, // Hidden
+  { href: "/combos", label: "Combo & Vision Adapter", icon: "layers" },
+  { href: "/usage", label: "Usage", icon: "bar_chart" },
+  { href: "/quota", label: "Quota Tracker", icon: "data_usage" },
+  { href: "/token-saver", label: "Token Saver", icon: "savings" },
+  // { href: "/pxpipe", label: "PXPIPE", icon: "image" },
+  { href: "/cli-tools", label: "CLI Tools", icon: "terminal" },
 ];
 
 const debugItems = [
-  { href: "/dashboard/console-log", label: "Console Log", icon: "terminal" },
-  { href: "/dashboard/translator", label: "Translator", icon: "translate" },
+  { href: "/console-log", label: "Console Log", icon: "terminal" },
+  { href: "/translator", label: "Translator", icon: "translate" },
 ];
 
 const systemItems = [
-  { href: "/dashboard/proxy-pools", label: "Proxy Pools", icon: "lan" },
-  { href: "/dashboard/skills", label: "Skills", icon: "extension" },
+  { href: "/proxy-pools", label: "Proxy Pools", icon: "lan" },
+  { href: "/skills", label: "Skills", icon: "extension" },
 ];
 
 export default function Sidebar({ onClose }) {
@@ -70,10 +70,10 @@ export default function Sidebar({ onClose }) {
   }, []);
 
   const isActive = (href) => {
-    if (href === "/dashboard/endpoint") {
-      return pathname === "/dashboard" || pathname.startsWith("/dashboard/endpoint");
+    if (href === "/endpoint") {
+      return pathname === "/" || pathname === "/dashboard" || pathname === "/endpoint" || pathname.startsWith("/endpoint") || pathname.startsWith("/dashboard/endpoint");
     }
-    return pathname.startsWith(href);
+    return pathname === href || pathname.startsWith(href + "/") || pathname.startsWith(`/dashboard${href}`);
   };
 
   // Open manual update panel (no countdown yet — user must click Copy to trigger shutdown)
@@ -120,7 +120,7 @@ export default function Sidebar({ onClose }) {
 
         {/* Logo */}
         <div className="px-6 py-4 flex flex-col gap-2">
-          <Link href="/dashboard" className="flex items-center gap-3">
+          <Link href="/endpoint" className="flex items-center gap-3">
             <div className="flex items-center justify-center size-9 rounded-[10px] bg-gradient-to-br from-brand-500 to-brand-700 shadow-[var(--shadow-warm)]">
               <span className="material-symbols-outlined text-white text-[20px]">hub</span>
             </div>
@@ -194,7 +194,7 @@ export default function Sidebar({ onClose }) {
               onClick={() => setMediaOpen((v) => !v)}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-1 rounded-lg transition-all group",
-                pathname.startsWith("/dashboard/media-providers")
+                pathname.startsWith("/media-providers") || pathname.startsWith("/dashboard/media-providers")
                   ? "bg-primary/10 text-primary"
                   : "text-text-muted hover:bg-surface-2 hover:text-text-main"
               )}
@@ -213,11 +213,11 @@ export default function Sidebar({ onClose }) {
                 {MEDIA_PROVIDER_KINDS.filter((k) => VISIBLE_MEDIA_KINDS.includes(k.id)).map((kind) => (
                   <Link
                     key={kind.id}
-                    href={`/dashboard/media-providers/${kind.id}`}
+                    href={`/media-providers/${kind.id}`}
                     onClick={onClose}
                     className={cn(
                       "flex items-center gap-3 px-4 py-1 rounded-lg transition-all group",
-                      pathname.startsWith(`/dashboard/media-providers/${kind.id}`)
+                      pathname.startsWith(`/media-providers/${kind.id}`) || pathname.startsWith(`/dashboard/media-providers/${kind.id}`)
                         ? "bg-primary/10 text-primary"
                         : "text-text-muted hover:bg-surface-2 hover:text-text-main"
                     )}
@@ -235,7 +235,7 @@ export default function Sidebar({ onClose }) {
                   onClick={onClose}
                   className={cn(
                     "flex items-center gap-3 px-4 py-1 rounded-lg transition-all group",
-                    pathname.startsWith(COMBINED_WEB_ITEM.href)
+                    pathname.startsWith(COMBINED_WEB_ITEM.href) || pathname.startsWith(`/dashboard${COMBINED_WEB_ITEM.href}`)
                       ? "bg-primary/10 text-primary"
                       : "text-text-muted hover:bg-surface-2 hover:text-text-main"
                   )}
@@ -272,7 +272,7 @@ export default function Sidebar({ onClose }) {
 
             {/* Debug items (inside System section, before Settings) */}
             {debugItems.map((item) => {
-              const show = item.href !== "/dashboard/translator" || enableTranslator;
+              const show = (item.href !== "/translator" && item.href !== "/dashboard/translator") || enableTranslator;
               return show ? (
                 <Link
                   key={item.href}
@@ -301,11 +301,11 @@ export default function Sidebar({ onClose }) {
 
             {/* Settings */}
             <Link
-              href="/dashboard/profile"
+              href="/profile"
               onClick={onClose}
               className={cn(
                 "flex items-center gap-3 px-3 py-1 rounded-lg transition-all group",
-                isActive("/dashboard/profile")
+                isActive("/profile")
                   ? "bg-primary/10 text-primary"
                   : "text-text-muted hover:bg-surface-2 hover:text-text-main"
               )}
@@ -313,7 +313,7 @@ export default function Sidebar({ onClose }) {
               <span
                 className={cn(
                   "material-symbols-outlined text-[18px]",
-                  isActive("/dashboard/profile") ? "fill-1" : "group-hover:text-primary transition-colors"
+                  isActive("/profile") ? "fill-1" : "group-hover:text-primary transition-colors"
                 )}
               >
                 settings

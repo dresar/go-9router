@@ -34,8 +34,8 @@ func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {
 	delete(safe, "password")
 	delete(safe, "oidcClientSecret")
 	safe["hasPassword"] = pwd != ""
-	safe["oidcConfigured"] = oidcSecret != "" &&
-		safe["oidcIssuerUrl"] != nil && safe["oidcClientId"] != nil
+	safe["oidcConfigured"] = oidcSecret != "" && safe["oidcIssuerUrl"] != nil && safe["oidcClientId"] != nil
+	safe["enableObservability"] = repos.SettingBool(settings, "enableObservability", true)
 	safe["enableRequestLogs"] = h.Cfg.EnableRequestLogs
 	safe["enableTranslator"] = false
 	w.Header().Set("Cache-Control", "no-store")

@@ -24,7 +24,7 @@ func RunInteractiveMenu(version string, port int, host string) {
 		if displayHost == "0.0.0.0" {
 			displayHost = "localhost"
 		}
-		webURL := fmt.Sprintf("http://%s:%d/dashboard", displayHost, port)
+		webURL := fmt.Sprintf("http://%s:%d/endpoint", displayHost, port)
 		fmt.Printf("📍 Gateway Endpoint: \033[1;33m%s\033[0m\n\n", webURL)
 
 		fmt.Println("Choose an option:")

@@ -28,14 +28,14 @@ const getPageInfo = (pathname) => {
       title: provider?.name || providerId,
       description: "",
       breadcrumbs: [
-        { label: "Media Providers", href: `/dashboard/media-providers/${kindId}` },
-        { label: kindConfig?.label || kindId, href: `/dashboard/media-providers/${kindId}` },
+        { label: "Media Providers", href: `/media-providers/${kindId}` },
+        { label: kindConfig?.label || kindId, href: `/media-providers/${kindId}` },
         { label: provider?.name || providerId, image: getProviderIconSrc(providerId) },
       ],
     };
   }
 
-  // Media provider kind: /dashboard/media-providers/[kind]
+  // Media provider kind: /media-providers/[kind]
   const mediaKindMatch = pathname.match(/\/media-providers\/([^/]+)$/);
   if (mediaKindMatch) {
     const kindId = mediaKindMatch[1];
@@ -48,7 +48,7 @@ const getPageInfo = (pathname) => {
     };
   }
 
-  // Provider detail page: /dashboard/providers/[id]
+  // Provider detail page: /providers/[id]
   const providerMatch = pathname.match(/\/providers\/([^/]+)$/);
   if (providerMatch) {
     const providerId = providerMatch[1];
@@ -59,7 +59,7 @@ const getPageInfo = (pathname) => {
         title: providerInfo.name,
         description: "",
         breadcrumbs: [
-          { label: "Providers", href: "/dashboard/providers" },
+          { label: "Providers", href: "/providers" },
           {
             label: providerInfo.name,
             image: getProviderIconSrc(providerInfo.id),
