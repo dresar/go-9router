@@ -14,7 +14,17 @@ import (
 )
 
 func (h *Handler) HandleFrontend(w http.ResponseWriter, r *http.Request) {
-	if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/v1/") {
+	if strings.HasPrefix(r.URL.Path, "/v1/") {
+		http.NotFound(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/") {
+		if isPortOpen("127.0.0.1", 20127) {
+			target, _ := url.Parse("http://127.0.0.1:20127")
+			proxy := httputil.NewSingleHostReverseProxy(target)
+			proxy.ServeHTTP(w, r)
+			return
+		}
 		http.NotFound(w, r)
 		return
 	}

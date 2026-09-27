@@ -102,7 +102,7 @@ func (h *Handler) handleSingleChat(w http.ResponseWriter, r *http.Request, body 
 			return
 		}
 		if sel == nil {
-			h.JSONError(w, http.StatusNotFound, fmt.Sprintf("no active credentials for provider: %s", providerID))
+			h.JSONError(w, http.StatusServiceUnavailable, fmt.Sprintf("no active credentials for provider: %s", providerID))
 			return
 		}
 		if sel.AllLocked {
