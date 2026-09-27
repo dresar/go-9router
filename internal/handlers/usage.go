@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"math"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -200,27 +202,25 @@ func (h *Handler) HandleUsageConnectionSub(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// 1. If Next.js / Node.js backend is active on port 20127, proxy so provider-specific quota engines run
+	if isPortOpen("127.0.0.1", 20127) {
+		target, err := url.Parse("http://127.0.0.1:20127")
+		if err == nil {
+			proxy := httputil.NewSingleHostReverseProxy(target)
+			proxy.ServeHTTP(w, r)
+			return
+		}
+	}
+
 	conn, err := repos.GetConnection(h.DB, sub)
 	if err != nil || conn == nil {
 		h.HandleUsageStats(w, r)
 		return
 	}
 
-	quotas := map[string]any{
-		"gemini_weekly": map[string]any{
-			"name":                "Gemini Weekly",
-			"used":                0,
-			"total":               1000,
-			"remainingPercentage": 100,
-		},
-		"claude_gpt_weekly": map[string]any{
-			"name":                "Claude / GPT Weekly",
-			"used":                0,
-			"total":               1000,
-			"remainingPercentage": 100,
-		},
-	}
+	quotas := map[string]any{}
 	plan := "Pro"
+	var message string
 
 	if strings.ToLower(conn.Provider) == "antigravity" && conn.AccessToken != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -251,8 +251,17 @@ func (h *Handler) HandleUsageConnectionSub(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	h.JSON(w, http.StatusOK, map[string]any{
+	if len(quotas) == 0 {
+		message = "Quota API tidak disediakan oleh provider ini"
+	}
+
+	resp := map[string]any{
 		"plan":   plan,
 		"quotas": quotas,
-	})
+	}
+	if message != "" {
+		resp["message"] = message
+	}
+
+	h.JSON(w, http.StatusOK, resp)
 }

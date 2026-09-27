@@ -1,7 +1,6 @@
 import { getModelsByProviderId } from "open-sse/config/providerModels.js";
 
-// ─── Constants ───────────────────────────────────────────────────────────────
-export const QUOTA_CACHE_KEY = "quotaCacheData";
+export const QUOTA_CACHE_KEY = "quotaCacheData_v3";
 export const REFRESH_INTERVAL_MS = 60000;
 // Claude usage/quota endpoint rate-limits; poll it less often than other providers
 export const CLAUDE_REFRESH_INTERVAL_MS = 600000;
@@ -197,8 +196,17 @@ export async function reconcileConnectionsPage(fetchConnections, targetPage) {
 export function getQuotaCache() {
   if (typeof window === "undefined") return {};
   try {
+    window.localStorage.removeItem("quotaCacheData");
+    window.localStorage.removeItem("quotaCacheData_v2");
     const cached = window.localStorage.getItem(QUOTA_CACHE_KEY);
-    return cached ? JSON.parse(cached) : {};
+    if (!cached) return {};
+    const parsed = JSON.parse(cached);
+    for (const [id, entry] of Object.entries(parsed)) {
+      if (Array.isArray(entry?.quotas) && entry.quotas.some((q) => q.modelKey === "claude_gpt_weekly" || q.name === "claude_gpt_weekly" || q.modelKey === "gemini_weekly")) {
+        delete parsed[id];
+      }
+    }
+    return parsed;
   } catch (error) {
     console.error("Error reading quota cache:", error);
     return {};
