@@ -1,0 +1,117 @@
+package handlers
+
+import (
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/dresar/go-9router/internal/auth"
+	"github.com/dresar/go-9router/internal/storage/repos"
+)
+
+func (h *Handler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var body struct {
+		Password string `json:"password"`
+	}
+	if err := h.DecodeJSON(r, &body); err != nil {
+		h.JSONError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	settings, err := repos.GetSettings(h.DB)
+	if err != nil {
+		h.JSONError(w, http.StatusInternalServerError, "failed to get settings")
+		return
+	}
+
+	storedHash := repos.SettingStr(settings, "password", "")
+	if storedHash == "" {
+		initialPwd := h.Cfg.InitialPassword
+		if initialPwd == "" {
+			initialPwd = "123456"
+		}
+		if body.Password != initialPwd {
+			h.JSONError(w, http.StatusUnauthorized, "Invalid password")
+			return
+		}
+		if body.Password != "123456" {
+			hash, err := auth.HashPassword(body.Password)
+			if err == nil {
+				_, _ = repos.UpdateSettings(h.DB, map[string]any{"password": hash})
+			}
+		}
+	} else {
+		if !auth.CheckPassword(storedHash, body.Password) {
+			h.JSONError(w, http.StatusUnauthorized, "Invalid password")
+			return
+		}
+	}
+
+	token, err := auth.SignSession(h.Cfg.JWTSecret)
+	if err != nil {
+		h.JSONError(w, http.StatusInternalServerError, "session error")
+		return
+	}
+
+	secure := h.Cfg.AuthCookieSecure
+	sameSite := http.SameSiteLaxMode
+	http.SetCookie(w, &http.Cookie{
+		Name:     auth.CookieName(),
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: sameSite,
+		Expires:  time.Now().Add(30 * 24 * time.Hour),
+	})
+	h.JSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+func (h *Handler) HandleAuthLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     auth.CookieName(),
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+	})
+	h.JSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+func (h *Handler) HandleAuthStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	token := extractToken(r)
+	if token == "" || auth.VerifySession(token, h.Cfg.JWTSecret) != nil {
+		h.JSON(w, http.StatusOK, map[string]bool{"authenticated": false})
+		return
+	}
+	settings, _ := repos.GetSettings(h.DB)
+	requireLogin := repos.SettingBool(settings, "requireLogin", false)
+	h.JSON(w, http.StatusOK, map[string]any{
+		"authenticated": true,
+		"requireLogin":  requireLogin,
+	})
+}
+
+func extractToken(r *http.Request) string {
+	if c, err := r.Cookie(auth.CookieName()); err == nil && c.Value != "" {
+		return c.Value
+	}
+	hdr := r.Header.Get("Authorization")
+	if strings.HasPrefix(hdr, "Bearer ") {
+		return hdr[7:]
+	}
+	return ""
+}
