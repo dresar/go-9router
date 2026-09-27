@@ -10,6 +10,7 @@ import {
   ProviderIcon,
 } from "@/shared/components";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
+import { getModelsByProviderId } from "@/shared/constants/models";
 import PlaygroundDropdown from "./PlaygroundDropdown";
 
 // Standard Fallback Provider Names
@@ -35,65 +36,78 @@ const PROVIDER_NAMES = {
   "codebuddy-intl": "CodeBuddy",
 };
 
-// Provider Presets for Chat Models (when database catalog is sparse)
+// Provider Presets for Chat Models (Curated free-tier and popular models)
 const DEFAULT_PROVIDER_MODELS = {
-  gemini: [
-    { id: "gemini/gemini-2.5-flash", name: "Gemini 2.5 Flash", subtitle: "Fast & Multimodal" },
-    { id: "gemini/gemini-2.5-pro", name: "Gemini 2.5 Pro", subtitle: "Strong reasoning" },
-    { id: "gemini/gemini-1.5-flash", name: "Gemini 1.5 Flash", subtitle: "High efficiency" },
-  ],
-  openai: [
-    { id: "openai/gpt-4o", name: "GPT-4o", subtitle: "Flagship multimodal" },
-    { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", subtitle: "Fast & lightweight" },
-    { id: "openai/chatgpt-4o-latest", name: "ChatGPT 4o Latest", subtitle: "Latest dynamic chat" },
-    { id: "openai/o1-mini", name: "o1 Mini", subtitle: "Math & code reasoning" },
-  ],
-  claude: [
-    { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", subtitle: "Leading code & analysis" },
-    { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", subtitle: "Ultra fast" },
-  ],
-  deepseek: [
-    { id: "deepseek/default", name: "DeepSeek Chat", subtitle: "General chat V3" },
-    { id: "deepseek-reasoner", name: "DeepSeek R1", subtitle: "Deep thinking & reasoning" },
-  ],
-  groq: [
-    { id: "groq/default", name: "Llama 3.3 70B", subtitle: "Ultra low-latency" },
+  qoder: [
+    { id: "qoder/ultimate", name: "Ultimate", subtitle: "Qoder Flagship" },
+    { id: "qoder/auto", name: "Auto", subtitle: "Smart routing" },
+    { id: "qoder/performance", name: "Performance", subtitle: "High performance" },
+    { id: "qoder/efficient", name: "Efficient", subtitle: "Resource balanced" },
+    { id: "qoder/lite", name: "Lite", subtitle: "Lightweight" },
+    { id: "qoder/qmodel_38max", name: "Qwen3.8-Max", subtitle: "Alibaba Qwen" },
+    { id: "qoder/qmodel_latest", name: "Qwen3.7-Max", subtitle: "Qwen 3.7 Max" },
+    { id: "qoder/qmodel", name: "Qwen3.7-Plus", subtitle: "Qwen 3.7 Plus" },
+    { id: "qoder/qfmodel", name: "Qwen3.8-Flash", subtitle: "Qwen 3.8 Flash" },
+    { id: "qoder/kmodel_latest", name: "Kimi-K3", subtitle: "Moonshot Kimi" },
+    { id: "qoder/kmodel", name: "Kimi-K2.7-Code", subtitle: "Kimi Code" },
+    { id: "qoder/gmodel", name: "GLM-5.3", subtitle: "Zhipu GLM" },
+    { id: "qoder/gfmodel", name: "GLM-5.3-Flash", subtitle: "GLM 5.3 Flash" },
+    { id: "qoder/dmodel", name: "DeepSeek-V4-Pro", subtitle: "DeepSeek Pro" },
+    { id: "qoder/dfmodel", name: "DeepSeek-V4-Flash", subtitle: "DeepSeek Flash" },
+    { id: "qoder/mmodel", name: "MiniMax-M3", subtitle: "MiniMax" },
   ],
   openrouter: [
-    { id: "openrouter/default", name: "OpenRouter Default", subtitle: "Auto routing" },
+    { id: "openrouter/cohere/north-mini-code:free", name: "Cohere North Mini (Free)", subtitle: "Free code reasoning" },
+    { id: "openrouter/google/gemma-4-26b-a4b-it:free", name: "Gemma 4 26B (Free)", subtitle: "Google open model" },
+    { id: "openrouter/meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B (Free)", subtitle: "Meta instruction tuned" },
+    { id: "openrouter/z-ai/glm-5.2:free", name: "GLM 5.2 (Free)", subtitle: "Zhipu general intelligence" },
+    { id: "openrouter/deepseek/deepseek-r1:free", name: "DeepSeek R1 (Free)", subtitle: "Advanced reasoning" },
+    { id: "openrouter/deepseek/deepseek-chat:free", name: "DeepSeek V3 (Free)", subtitle: "Fast dynamic chat" },
+    { id: "openrouter/meta-llama/llama-3.1-8b-instruct:free", name: "Llama 3.1 8B (Free)", subtitle: "Lightweight free" },
+    { id: "openrouter/mistralai/mistral-7b-instruct:free", name: "Mistral 7B (Free)", subtitle: "Mistral free" },
+    { id: "openrouter/qwen/qwen-2.5-coder-32b-instruct:free", name: "Qwen 2.5 Coder 32B (Free)", subtitle: "Code generation" },
+  ],
+  gemini: [
+    { id: "gemini/gemini-2.5-flash", name: "Gemini 2.5 Flash", subtitle: "Fast multimodal" },
+    { id: "gemini/gemini-2.5-pro", name: "Gemini 2.5 Pro", subtitle: "Complex reasoning" },
+    { id: "gemini/gemini-1.5-flash", name: "Gemini 1.5 Flash", subtitle: "High efficiency" },
+    { id: "gemini/gemini-1.5-pro", name: "Gemini 1.5 Pro", subtitle: "Extended window" },
+  ],
+  groq: [
+    { id: "groq/llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile", subtitle: "Fast 128k context" },
+    { id: "groq/llama-3.1-8b-instant", name: "Llama 3.1 8B Instant", subtitle: "Ultra low latency" },
+    { id: "groq/mixtral-8x7b-32768", name: "Mixtral 8x7B", subtitle: "MoE architecture" },
   ],
   kimi: [
-    { id: "kimi/default", name: "Moonshot Kimi", subtitle: "Long context" },
+    { id: "kimi/kimi-k2.5", name: "Kimi K2.5", subtitle: "Long context" },
+    { id: "kimi/kimi-k2", name: "Kimi K2", subtitle: "Balanced" },
+    { id: "kimi/kimi-latest", name: "Kimi Latest", subtitle: "Latest version" },
   ],
   kiro: [
-    { id: "kiro/default", name: "Kiro Default", subtitle: "Proxy gateway" },
-  ],
-  qoder: [
-    { id: "qoder/default", name: "Qoder Default", subtitle: "Active connection" },
+    { id: "kiro/claude-3-7-sonnet", name: "Claude 3.7 Sonnet (Kiro)", subtitle: "Via Kiro proxy" },
+    { id: "kiro/claude-3-5-sonnet", name: "Claude 3.5 Sonnet (Kiro)", subtitle: "Via Kiro proxy" },
+    { id: "kiro/claude-3-5-haiku", name: "Claude 3.5 Haiku (Kiro)", subtitle: "Via Kiro proxy" },
   ],
   cline: [
-    { id: "cline/default", name: "Cline Default", subtitle: "Active connection" },
+    { id: "cline/claude-3-7-sonnet", name: "Claude 3.7 Sonnet (Cline)", subtitle: "Via Cline auth" },
+    { id: "cline/claude-3-5-sonnet", name: "Claude 3.5 Sonnet (Cline)", subtitle: "Via Cline auth" },
+    { id: "cline/claude-3-5-haiku", name: "Claude 3.5 Haiku (Cline)", subtitle: "Via Cline auth" },
+  ],
+  chutes: [
+    { id: "chutes/deepseek-ai/DeepSeek-V3", name: "DeepSeek V3 (Chutes)", subtitle: "Fast open weights" },
+    { id: "chutes/deepseek-ai/DeepSeek-R1", name: "DeepSeek R1 (Chutes)", subtitle: "Reasoning engine" },
   ],
 };
 
-// Presets for Image Generation
+// Presets for Image Generation (Free Tier only)
 const IMAGE_PROVIDERS = [
-  { id: "openai", name: "OpenAI", providerId: "openai", subtitle: "DALL-E series" },
-  { id: "openrouter", name: "OpenRouter", providerId: "openrouter", subtitle: "FLUX & Stable Diffusion" },
-  { id: "xai", name: "xAI Grok", providerId: "xai", subtitle: "Grok Imagine" },
+  { id: "openrouter", name: "OpenRouter", providerId: "openrouter", subtitle: "FLUX & SD (Free Tier)" },
 ];
 
 const IMAGE_MODELS_BY_PROVIDER = {
-  openai: [
-    { id: "openai/dall-e-3", name: "DALL-E 3", subtitle: "High quality & details" },
-    { id: "openai/dall-e-2", name: "DALL-E 2", subtitle: "Fast generation" },
-  ],
   openrouter: [
-    { id: "openrouter/black-forest-labs/flux-1-schnell", name: "FLUX 1 Schnell", subtitle: "Fast 4-step" },
+    { id: "openrouter/black-forest-labs/flux-1-schnell", name: "FLUX 1 Schnell", subtitle: "Free tier fast 4-step" },
     { id: "openrouter/black-forest-labs/flux-1-dev", name: "FLUX 1 Dev", subtitle: "Studio quality" },
-  ],
-  xai: [
-    { id: "grok-imagine", name: "Grok Imagine", subtitle: "Visual generation" },
   ],
 };
 
@@ -122,6 +136,7 @@ export default function PlaygroundClient() {
   const [dbProviders, setDbProviders] = useState([]);
   const [dbCombos, setDbCombos] = useState([]);
   const [dbModels, setDbModels] = useState([]);
+  const [dbCustomModels, setDbCustomModels] = useState([]);
 
   // Chat State
   const [chatProvider, setChatProvider] = useState("combo");
@@ -139,9 +154,9 @@ export default function PlaygroundClient() {
   const [chatLastPayload, setChatLastPayload] = useState(null);
   const [chatError, setChatError] = useState("");
 
-  // Image State
-  const [imageProvider, setImageProvider] = useState("openai");
-  const [imageModel, setImageModel] = useState("openai/dall-e-3");
+  // Image State (Free Tier default)
+  const [imageProvider, setImageProvider] = useState("openrouter");
+  const [imageModel, setImageModel] = useState("openrouter/black-forest-labs/flux-1-schnell");
   const [imageCustomModel, setImageCustomModel] = useState("");
   const [imagePrompt, setImagePrompt] = useState("");
   const [imageSize, setImageSize] = useState("1024x1024");
@@ -160,15 +175,16 @@ export default function PlaygroundClient() {
   const fileInputRef = useRef(null);
   const timerRef = useRef(null);
 
-  // 1. Initial Data Fetch: Keys, Providers, Combos, Models
+  // 1. Initial Data Fetch: Keys, Providers, Combos, Models, Custom Models
   useEffect(() => {
     async function loadInitialData() {
       try {
-        const [keysRes, providersRes, combosRes, modelsRes] = await Promise.all([
+        const [keysRes, providersRes, combosRes, modelsRes, customModelsRes] = await Promise.all([
           fetch("/api/keys").catch(() => null),
           fetch("/api/providers").catch(() => null),
           fetch("/api/combos").catch(() => null),
           fetch("/api/models").catch(() => null),
+          fetch("/api/models/custom").catch(() => null),
         ]);
 
         if (keysRes && keysRes.ok) {
@@ -212,6 +228,11 @@ export default function PlaygroundClient() {
           setDbModels(modelsData.data || []);
         }
 
+        if (customModelsRes && customModelsRes.ok) {
+          const customData = await customModelsRes.json();
+          setDbCustomModels(customData.models || []);
+        }
+
         // Set Default Provider & Model
         if (loadedCombos.length > 0) {
           setChatProvider("combo");
@@ -220,8 +241,8 @@ export default function PlaygroundClient() {
           const firstProv = activeProviderList[0].id;
           setChatProvider(firstProv);
         } else {
-          setChatProvider("openai");
-          setChatModel("openai/gpt-4o");
+          setChatProvider("openrouter");
+          setChatModel("openrouter/cohere/north-mini-code:free");
         }
       } catch (err) {
         console.error("Gagal memuat data playground:", err);
@@ -278,7 +299,7 @@ export default function PlaygroundClient() {
       });
     }
 
-    // 2. Active Providers from DB
+    // 2. Active Providers configured in DB
     for (const p of dbProviders) {
       list.push({
         id: p.id,
@@ -289,16 +310,15 @@ export default function PlaygroundClient() {
       });
     }
 
-    // 3. Fallback popular providers if not already listed
-    const existingIds = new Set(list.map((item) => item.id));
-    const popularFallbacks = ["openai", "gemini", "claude", "deepseek", "groq", "openrouter"];
-    for (const fb of popularFallbacks) {
-      if (!existingIds.has(fb)) {
+    // 3. Only if no active providers configured, fallback to verified free-tier providers
+    if (list.length === 0) {
+      const freeTierFallbacks = ["openrouter", "groq", "gemini"];
+      for (const fb of freeTierFallbacks) {
         list.push({
           id: fb,
           name: PROVIDER_NAMES[fb] || fb,
           providerId: fb,
-          subtitle: "Standar API",
+          subtitle: "Free Tier",
         });
       }
     }
@@ -322,22 +342,7 @@ export default function PlaygroundClient() {
     const models = [];
     const seen = new Set();
 
-    // 1. Models from DB `/api/models` matching provider
-    for (const m of dbModels) {
-      const isOwned = m.owned_by === chatProvider;
-      const isPrefixed = m.id.startsWith(`${chatProvider}/`);
-      if (isOwned || isPrefixed) {
-        seen.add(m.id);
-        models.push({
-          id: m.id,
-          name: m.id,
-          providerId: chatProvider,
-          subtitle: "Database gateway",
-        });
-      }
-    }
-
-    // 2. Presets for this provider
+    // 1. Curated Presets for this provider (e.g. Free Tier models & favorites)
     const presets = DEFAULT_PROVIDER_MODELS[chatProvider] || [];
     for (const p of presets) {
       if (!seen.has(p.id)) {
@@ -351,17 +356,65 @@ export default function PlaygroundClient() {
       }
     }
 
-    // 3. If empty, provide a sensible default
+    // 2. Official models from registry (e.g. Qoder all 16 models, Groq, Gemini)
+    const regModels = getModelsByProviderId(chatProvider) || [];
+    for (const rm of regModels) {
+      const fullId = rm.id.startsWith(`${chatProvider}/`) ? rm.id : `${chatProvider}/${rm.id}`;
+      if (!seen.has(fullId)) {
+        seen.add(fullId);
+        models.push({
+          id: fullId,
+          name: rm.name || rm.id,
+          providerId: chatProvider,
+          subtitle: rm.name !== rm.id ? rm.id : "Official model",
+        });
+      }
+    }
+
+    // 3. Custom Models from DB matching this provider
+    for (const cm of dbCustomModels) {
+      if (cm.providerAlias === chatProvider || cm.provider === chatProvider) {
+        const fullId = cm.id.startsWith(`${chatProvider}/`) ? cm.id : `${chatProvider}/${cm.id}`;
+        if (!seen.has(fullId)) {
+          seen.add(fullId);
+          models.push({
+            id: fullId,
+            name: cm.name || cm.id,
+            providerId: chatProvider,
+            subtitle: "Custom model",
+          });
+        }
+      }
+    }
+
+    // 4. Models from DB `/api/models` matching provider
+    for (const m of dbModels) {
+      const isOwned = m.owned_by === chatProvider;
+      const isPrefixed = m.id.startsWith(`${chatProvider}/`);
+      if (isOwned || isPrefixed) {
+        if (!seen.has(m.id)) {
+          seen.add(m.id);
+          models.push({
+            id: m.id,
+            name: m.id,
+            providerId: chatProvider,
+            subtitle: "Gateway model",
+          });
+        }
+      }
+    }
+
+    // 5. If empty, provide a sensible default
     if (models.length === 0) {
       models.push({
         id: `${chatProvider}/default`,
-        name: `${chatProvider} Default`,
+        name: `${PROVIDER_NAMES[chatProvider] || chatProvider} Default`,
         providerId: chatProvider,
         subtitle: "Rute default",
       });
     }
 
-    // 4. Custom Model option
+    // 6. Custom Model option
     models.push({
       id: "custom",
       name: "+ Model Kustom...",
@@ -370,7 +423,7 @@ export default function PlaygroundClient() {
     });
 
     return models;
-  }, [chatProvider, dbCombos, dbModels]);
+  }, [chatProvider, dbCombos, dbModels, dbCustomModels]);
 
   // Synchronize chatModel when chatProvider changes
   const handleChatProviderChange = (newProviderId) => {
@@ -383,11 +436,22 @@ export default function PlaygroundClient() {
       }
     } else {
       const presets = DEFAULT_PROVIDER_MODELS[newProviderId] || [];
+      const regModels = getModelsByProviderId(newProviderId) || [];
+      const customMatch = dbCustomModels.find(
+        (m) => m.providerAlias === newProviderId || m.provider === newProviderId
+      );
       const dbMatch = dbModels.find(
         (m) => m.owned_by === newProviderId || m.id.startsWith(`${newProviderId}/`)
       );
+
       if (presets.length > 0) {
         setChatModel(presets[0].id);
+      } else if (regModels.length > 0) {
+        const rm = regModels[0];
+        setChatModel(rm.id.startsWith(`${newProviderId}/`) ? rm.id : `${newProviderId}/${rm.id}`);
+      } else if (customMatch) {
+        const cid = customMatch.id;
+        setChatModel(cid.startsWith(`${newProviderId}/`) ? cid : `${newProviderId}/${cid}`);
       } else if (dbMatch) {
         setChatModel(dbMatch.id);
       } else {
