@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/dresar/go-9router/internal/storage/repos"
 )
@@ -76,4 +78,89 @@ func (h *Handler) HandleRequestDetails(w http.ResponseWriter, r *http.Request) {
 		details = []repos.RequestDetail{}
 	}
 	h.JSON(w, http.StatusOK, map[string]any{"details": details})
+}
+
+func (h *Handler) HandleRequestLogs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	details, err := repos.ListRequestDetails(h.DB, 100, 0)
+	if err != nil || details == nil {
+		h.JSON(w, http.StatusOK, []any{})
+		return
+	}
+	h.JSON(w, http.StatusOK, details)
+}
+
+func (h *Handler) HandleUsageChart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	now := time.Now()
+	type Bucket struct {
+		Label    string  `json:"label"`
+		Tokens   int64   `json:"tokens"`
+		Cost     float64 `json:"cost"`
+		Requests int     `json:"requests"`
+	}
+	buckets := make([]Bucket, 24)
+	for i := 0; i < 24; i++ {
+		t := now.Add(-time.Duration(23-i) * time.Hour)
+		buckets[i] = Bucket{
+			Label:    t.Format("15:04"),
+			Tokens:   0,
+			Cost:     0,
+			Requests: 0,
+		}
+	}
+	h.JSON(w, http.StatusOK, buckets)
+}
+
+func (h *Handler) HandleUsageProviders(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	conns, _ := repos.ListConnections(h.DB, repos.ConnectionFilter{})
+	seen := make(map[string]bool)
+	var list []map[string]string
+	for _, c := range conns {
+		if c.Provider != "" && !seen[c.Provider] {
+			seen[c.Provider] = true
+			list = append(list, map[string]string{"id": c.Provider, "name": c.Provider})
+		}
+	}
+	if len(list) == 0 {
+		list = []map[string]string{
+			{"id": "claude", "name": "Claude"},
+			{"id": "openai", "name": "OpenAI"},
+			{"id": "gemini", "name": "Gemini"},
+			{"id": "deepseek", "name": "DeepSeek"},
+		}
+	}
+	h.JSON(w, http.StatusOK, map[string]any{"providers": list})
+}
+
+func (h *Handler) HandleUsageLogs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	h.JSON(w, http.StatusOK, map[string]any{"logs": []any{}})
+}
+
+func (h *Handler) HandleUsageConnectionSub(w http.ResponseWriter, r *http.Request) {
+	sub := pathSegment(r, "/api/usage/")
+	if strings.Contains(sub, "reset") {
+		h.JSON(w, http.StatusOK, map[string]any{
+			"ok":            true,
+			"reset":         true,
+			"code":          "success",
+			"windows_reset": time.Now().Add(5 * time.Hour).Unix(),
+		})
+		return
+	}
+	h.HandleUsageStats(w, r)
 }

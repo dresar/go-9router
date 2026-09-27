@@ -110,6 +110,15 @@ func (h *Handler) HandleAuthStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *Handler) HandleAuthResetPassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	_, _ = repos.UpdateSettings(h.DB, map[string]any{"password": ""})
+	h.JSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
 func extractToken(r *http.Request) string {
 	if c, err := r.Cookie("auth_token"); err == nil && c.Value != "" {
 		return c.Value

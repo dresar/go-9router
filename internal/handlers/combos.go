@@ -94,9 +94,27 @@ func (h *Handler) HandleComboByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleComboPresets(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
+	source := r.URL.Query().Get("source")
+	if source == "" {
+		source = "claude"
 	}
-	h.JSON(w, http.StatusOK, map[string]any{"presets": []any{}})
+	switch r.Method {
+	case http.MethodGet:
+		h.JSON(w, http.StatusOK, map[string]any{
+			"source":   source,
+			"items":    []any{},
+			"toCreate": 0,
+			"toSkip":   0,
+		})
+	case http.MethodPost:
+		h.JSON(w, http.StatusOK, map[string]any{
+			"source":       source,
+			"created":      []any{},
+			"skipped":      []any{},
+			"createdCount": 0,
+			"skippedCount": 0,
+		})
+	default:
+		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
 }

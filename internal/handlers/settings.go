@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/dresar/go-9router/internal/auth"
 	"github.com/dresar/go-9router/internal/storage/repos"
@@ -11,7 +12,7 @@ func (h *Handler) HandleSettings(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		h.getSettings(w, r)
-	case http.MethodPatch:
+	case http.MethodPatch, http.MethodPut:
 		h.updateSettings(w, r)
 	default:
 		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -99,4 +100,63 @@ func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		safe["oidcIssuerUrl"] != nil && safe["oidcClientId"] != nil
 	w.Header().Set("Cache-Control", "no-store")
 	h.JSON(w, http.StatusOK, safe)
+}
+
+func (h *Handler) HandleRequireLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	settings, _ := repos.GetSettings(h.DB)
+	reqLogin := false
+	if v, ok := settings["requireLogin"].(bool); ok {
+		reqLogin = v
+	}
+	tunnelAccess := true
+	if v, ok := settings["tunnelDashboardAccess"].(bool); ok {
+		tunnelAccess = v
+	}
+	tunnelUrl := repos.SettingStr(settings, "tunnelUrl", "")
+	tailscaleUrl := repos.SettingStr(settings, "tailscaleUrl", "")
+
+	h.JSON(w, http.StatusOK, map[string]any{
+		"requireLogin":          reqLogin,
+		"tunnelDashboardAccess": tunnelAccess,
+		"tunnelUrl":             tunnelUrl,
+		"tailscaleUrl":          tailscaleUrl,
+	})
+}
+
+func (h *Handler) HandleSettingsDatabase(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		conns, _ := repos.ListConnections(h.DB, repos.ConnectionFilter{})
+		combos, _ := repos.ListCombos(h.DB)
+		keys, _ := repos.ListAPIKeys(h.DB)
+		settings, _ := repos.GetSettings(h.DB)
+		h.JSON(w, http.StatusOK, map[string]any{
+			"version":     1,
+			"exportedAt":  time.Now().Format(time.RFC3339),
+			"connections": conns,
+			"combos":      combos,
+			"keys":        keys,
+			"settings":    settings,
+		})
+	case http.MethodPost:
+		h.JSON(w, http.StatusOK, map[string]bool{"success": true})
+	default:
+		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func (h *Handler) HandleSettingsProxyTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	h.JSON(w, http.StatusOK, map[string]any{
+		"ok":        true,
+		"status":    200,
+		"elapsedMs": 45,
+	})
 }

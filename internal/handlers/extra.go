@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/dresar/go-9router/internal/storage/repos"
 )
@@ -181,6 +182,38 @@ func (h *Handler) HandlePricing(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) HandleTunnelStatus(w http.ResponseWriter, r *http.Request) {
 	h.JSON(w, http.StatusOK, map[string]any{
+		"tunnel": map[string]any{
+			"enabled": false,
+			"status":  "stopped",
+			"url":     "",
+		},
+		"tailscale": map[string]any{
+			"enabled":   false,
+			"status":    "stopped",
+			"url":       "",
+			"installed": false,
+		},
+		"download": nil,
+	})
+}
+
+func (h *Handler) HandleTunnelAction(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	if strings.HasSuffix(path, "tailscale-check") {
+		h.JSON(w, http.StatusOK, map[string]any{
+			"installed":           false,
+			"loggedIn":            false,
+			"platform":            "windows",
+			"brewAvailable":       false,
+			"daemonRunning":       false,
+			"customDaemonRunning": false,
+			"systemDaemonRunning": false,
+			"hasCachedPassword":   false,
+		})
+		return
+	}
+	h.JSON(w, http.StatusOK, map[string]any{
+		"success": true,
 		"enabled": false,
 		"status":  "stopped",
 		"url":     "",
@@ -195,7 +228,37 @@ func (h *Handler) HandleHeadroomStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleCLITools(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	if strings.HasSuffix(path, "all-statuses") {
+		statuses := map[string]any{
+			"claude":       map[string]any{"installed": true, "configured": false, "active": false},
+			"codex":        map[string]any{"installed": true, "configured": false, "active": false},
+			"opencode":     map[string]any{"installed": true, "configured": false, "active": false},
+			"droid":        map[string]any{"installed": false, "configured": false, "active": false},
+			"openclaw":     map[string]any{"installed": false, "configured": false, "active": false},
+			"hermes":       map[string]any{"installed": false, "configured": false, "active": false},
+			"cowork":       map[string]any{"installed": false, "configured": false, "active": false},
+			"cline":        map[string]any{"installed": false, "configured": false, "active": false},
+			"kilo":         map[string]any{"installed": false, "configured": false, "active": false},
+			"deepseek-tui": map[string]any{"installed": false, "configured": false, "active": false},
+			"jcode":        map[string]any{"installed": false, "configured": false, "active": false},
+			"grok-build":   map[string]any{"installed": false, "configured": false, "active": false},
+			"devin":        map[string]any{"installed": false, "configured": false, "active": false},
+			"pi":           map[string]any{"installed": false, "configured": false, "active": false},
+			"omp":          map[string]any{"installed": false, "configured": false, "active": false},
+			"crush":        map[string]any{"installed": false, "configured": false, "active": false},
+			"forge":        map[string]any{"installed": false, "configured": false, "active": false},
+			"smelt":        map[string]any{"installed": false, "configured": false, "active": false},
+			"codewhale":    map[string]any{"installed": false, "configured": false, "active": false},
+		}
+		h.JSON(w, http.StatusOK, statuses)
+		return
+	}
+
 	h.JSON(w, http.StatusOK, map[string]any{
+		"installed":  true,
+		"configured": false,
+		"active":     false,
 		"tools": []map[string]any{
 			{"id": "claude", "name": "Claude Code", "status": "supported", "env": "ANTHROPIC_BASE_URL"},
 			{"id": "cursor", "name": "Cursor", "status": "supported", "env": "OPENAI_BASE_URL"},
@@ -206,8 +269,103 @@ func (h *Handler) HandleCLITools(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleTranslator(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	if strings.Contains(path, "console-logs") {
+		h.JSON(w, http.StatusOK, map[string]any{"logs": []any{}})
+		return
+	}
 	h.JSON(w, http.StatusOK, map[string]any{
-		"active": true,
+		"active":  true,
 		"formats": []string{"openai", "anthropic", "gemini", "codex", "kiro"},
+	})
+}
+
+func (h *Handler) HandleNodeValidate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	h.JSON(w, http.StatusOK, map[string]any{
+		"valid": true,
+	})
+}
+
+func (h *Handler) HandleProxyPoolTest(w http.ResponseWriter, r *http.Request) {
+	h.JSON(w, http.StatusOK, map[string]any{
+		"ok":        true,
+		"status":    200,
+		"elapsedMs": 35,
+	})
+}
+
+func (h *Handler) HandleProxyPoolDeploy(w http.ResponseWriter, r *http.Request) {
+	h.JSON(w, http.StatusOK, map[string]any{
+		"success":   true,
+		"deployUrl": "https://relay.example.com",
+	})
+}
+
+func (h *Handler) HandleOAuth(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	if strings.Contains(path, "auto-import") {
+		h.JSON(w, http.StatusOK, map[string]any{
+			"found": false,
+			"error": "No local session detected",
+		})
+		return
+	}
+	if strings.Contains(path, "poll") || strings.Contains(path, "status") {
+		h.JSON(w, http.StatusOK, map[string]any{
+			"status":    "idle",
+			"completed": false,
+		})
+		return
+	}
+	h.JSON(w, http.StatusOK, map[string]any{
+		"success": true,
+	})
+}
+
+func (h *Handler) HandlePxpipe(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	if strings.HasSuffix(path, "health") {
+		h.JSON(w, http.StatusOK, map[string]any{"status": "ok", "healthy": true})
+		return
+	}
+	if strings.HasSuffix(path, "stats") {
+		h.JSON(w, http.StatusOK, map[string]any{"processed": 0, "savedChars": 0})
+		return
+	}
+	if strings.HasSuffix(path, "logs") {
+		h.JSON(w, http.StatusOK, map[string]any{"logs": []any{}})
+		return
+	}
+	h.JSON(w, http.StatusOK, map[string]any{
+		"running":     false,
+		"installed":   false,
+		"enabled":     false,
+		"autoInstall": false,
+		"minChars":    500,
+		"timeoutMs":   5000,
+	})
+}
+
+func (h *Handler) HandleMediaProviders(w http.ResponseWriter, r *http.Request) {
+	h.JSON(w, http.StatusOK, map[string]any{
+		"voices": []any{},
+	})
+}
+
+func (h *Handler) HandleVersionActions(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	if strings.HasSuffix(path, "shutdown") {
+		h.HandleShutdown(w, r)
+		return
+	}
+	// update
+	h.JSON(w, http.StatusOK, map[string]any{
+		"currentVersion":  "0.1.0-go",
+		"latestVersion":   "0.1.0-go",
+		"updateAvailable": false,
 	})
 }

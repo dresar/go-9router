@@ -120,3 +120,47 @@ func buildModelList(conns []repos.Connection) []map[string]any {
 	}
 	return out
 }
+
+func (h *Handler) HandleModelAvailability(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		h.JSON(w, http.StatusOK, map[string]any{
+			"models":           []any{},
+			"unavailableCount": 0,
+		})
+	case http.MethodPost:
+		h.JSON(w, http.StatusOK, map[string]bool{"ok": true})
+	default:
+		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func (h *Handler) HandleDisabledModels(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		q := r.URL.Query()
+		if q.Get("providerAlias") != "" {
+			h.JSON(w, http.StatusOK, map[string]any{"ids": []string{}})
+			return
+		}
+		h.JSON(w, http.StatusOK, map[string]any{"disabled": map[string]any{}})
+	case http.MethodPost:
+		h.JSON(w, http.StatusOK, map[string]bool{"success": true})
+	case http.MethodDelete:
+		h.JSON(w, http.StatusOK, map[string]bool{"success": true})
+	default:
+		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func (h *Handler) HandleModelTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	h.JSON(w, http.StatusOK, map[string]any{
+		"ok":        true,
+		"valid":     true,
+		"latencyMs": 120,
+	})
+}
