@@ -732,8 +732,33 @@ export default function ProviderDetailPage() {
 
           if (valid) {
             passed += 1;
+            setConnections((prev) =>
+              prev.map((c) =>
+                c.id === connection.id
+                  ? {
+                      ...c,
+                      lastError: null,
+                      errorCode: null,
+                      lastErrorAt: null,
+                      testStatus: "active",
+                    }
+                  : c
+              )
+            );
           } else {
             failed += 1;
+            const errMsg = data.error || "Test failed";
+            setConnections((prev) =>
+              prev.map((c) =>
+                c.id === connection.id
+                  ? {
+                      ...c,
+                      lastError: errMsg,
+                      testStatus: "error",
+                    }
+                  : c
+              )
+            );
           }
 
           setOneByOneResults((prev) => ({
@@ -745,11 +770,23 @@ export default function ProviderDetailPage() {
           }));
         } catch (error) {
           failed += 1;
+          const errMsg = error.message || "Test failed";
+          setConnections((prev) =>
+            prev.map((c) =>
+              c.id === connection.id
+                ? {
+                    ...c,
+                    lastError: errMsg,
+                    testStatus: "error",
+                  }
+                : c
+            )
+          );
           setOneByOneResults((prev) => ({
             ...prev,
             [connection.id]: {
               state: "failed",
-              error: error.message || "Test failed",
+              error: errMsg,
             },
           }));
         }
@@ -771,6 +808,7 @@ export default function ProviderDetailPage() {
       setOneByOneRunning(false);
       setOneByOneStopping(false);
       stopOneByOneRef.current = false;
+      await fetchConnections();
     }
   };
 

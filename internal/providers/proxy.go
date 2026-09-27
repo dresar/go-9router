@@ -111,7 +111,7 @@ func ResolveProxy(db *sql.DB, creds *Credentials, targetURL string) (*ResolvedPr
 
 	if poolID != "" && db != nil {
 		pool, err := repos.GetProxyPoolByID(db, poolID)
-		if err == nil && pool != nil && pool.ProxyURL != "" {
+		if err == nil && pool != nil && pool.IsActive && pool.ProxyURL != "" {
 			pType := strings.ToLower(pool.Type)
 			if pType == "vercel" || pType == "cloudflare" || pType == "deno" {
 				return &ResolvedProxy{
@@ -210,8 +210,8 @@ func DoUpstreamWithProxy(ctx context.Context, req *http.Request, db *sql.DB, cre
 		logging.Info("PROXY", fmt.Sprintf("▶ RELAY [%s/%s] %s -> %s%s", resolved.PoolType, resolved.PoolName, resolved.RelayURL, targetBase, targetPath))
 
 		res, err := DoUpstream(ctx, req)
-		if err != nil && !resolved.StrictProxy && db != nil {
-			// Failover: if this relay failed with network error, try another active relay
+		if (err != nil || (res != nil && (res.Status == 404 || res.Status == 502))) && !resolved.StrictProxy && db != nil {
+			// Failover: if this relay failed with network error or dead deployment (404/502), try another active relay
 			logging.Warn("PROXY", fmt.Sprintf("Relay %s failed, attempting failover...", resolved.RelayURL))
 			activePools, _ := repos.ListProxyPools(db, true)
 			for _, alt := range activePools {

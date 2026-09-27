@@ -292,6 +292,112 @@ func testSingleConnection(db *sql.DB, conn *repos.Connection) (valid bool, errSt
 		}
 		return false, fmt.Sprintf("GitHub probe failed (HTTP %d)", res.Status), false
 
+	case "openrouter":
+		key := conn.APIKey
+		if key == "" {
+			key = conn.AccessToken
+		}
+		if key == "" {
+			return false, "Missing OpenRouter API key", false
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://openrouter.ai/api/v1/auth/key", nil)
+		if err != nil {
+			return false, err.Error(), false
+		}
+		req.Header.Set("Authorization", "Bearer "+key)
+		res, err := providers.DoUpstreamWithProxy(ctx, req, db, &providers.Credentials{ProxyPoolID: conn.ProxyPoolID})
+		if err != nil {
+			return false, err.Error(), false
+		}
+		if res.Response != nil && res.Response.Body != nil {
+			res.Response.Body.Close()
+		}
+		if res.Status >= 200 && res.Status < 300 {
+			return true, "", false
+		}
+		if res.Status == 401 || res.Status == 403 {
+			return false, "Invalid API key", false
+		}
+		return false, fmt.Sprintf("OpenRouter probe failed (HTTP %d)", res.Status), false
+
+	case "deepseek":
+		key := conn.APIKey
+		if key == "" {
+			key = conn.AccessToken
+		}
+		if key == "" {
+			return false, "Missing DeepSeek API key", false
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.deepseek.com/models", nil)
+		if err != nil {
+			return false, err.Error(), false
+		}
+		req.Header.Set("Authorization", "Bearer "+key)
+		res, err := providers.DoUpstreamWithProxy(ctx, req, db, &providers.Credentials{ProxyPoolID: conn.ProxyPoolID})
+		if err != nil {
+			return false, err.Error(), false
+		}
+		if res.Response != nil && res.Response.Body != nil {
+			res.Response.Body.Close()
+		}
+		if res.Status >= 200 && res.Status < 300 {
+			return true, "", false
+		}
+		if res.Status == 401 || res.Status == 403 {
+			return false, "Invalid API key", false
+		}
+		return false, fmt.Sprintf("DeepSeek probe failed (HTTP %d)", res.Status), false
+
+	case "groq":
+		key := conn.APIKey
+		if key == "" {
+			key = conn.AccessToken
+		}
+		if key == "" {
+			return false, "Missing Groq API key", false
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.groq.com/openai/v1/models", nil)
+		if err != nil {
+			return false, err.Error(), false
+		}
+		req.Header.Set("Authorization", "Bearer "+key)
+		res, err := providers.DoUpstreamWithProxy(ctx, req, db, &providers.Credentials{ProxyPoolID: conn.ProxyPoolID})
+		if err != nil {
+			return false, err.Error(), false
+		}
+		if res.Response != nil && res.Response.Body != nil {
+			res.Response.Body.Close()
+		}
+		if res.Status >= 200 && res.Status < 300 {
+			return true, "", false
+		}
+		return false, fmt.Sprintf("Groq probe failed (HTTP %d)", res.Status), false
+
+	case "openai":
+		key := conn.APIKey
+		if key == "" {
+			key = conn.AccessToken
+		}
+		if key == "" {
+			return false, "Missing OpenAI API key", false
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.openai.com/v1/models", nil)
+		if err != nil {
+			return false, err.Error(), false
+		}
+		req.Header.Set("Authorization", "Bearer "+key)
+		res, err := providers.DoUpstreamWithProxy(ctx, req, db, &providers.Credentials{ProxyPoolID: conn.ProxyPoolID})
+		if err != nil {
+			return false, err.Error(), false
+		}
+		if res.Response != nil && res.Response.Body != nil {
+			res.Response.Body.Close()
+		}
+		if res.Status >= 200 && res.Status < 300 {
+			return true, "", false
+		}
+		return false, fmt.Sprintf("OpenAI probe failed (HTTP %d)", res.Status), false
+
 	default:
 		if conn.APIKey == "" && conn.AccessToken == "" {
 			return false, "No API key or token configured", false
@@ -371,11 +477,27 @@ func (h *Handler) HandleTestBatch(w http.ResponseWriter, r *http.Request) {
 			lastErr = errStr
 		}
 		now := time.Now().UTC().Format(time.RFC3339Nano)
-		_, _ = repos.UpdateConnection(h.DB, id, map[string]any{
+		updates := map[string]any{
 			"testStatus":   testStatus,
 			"lastTestedAt": now,
 			"lastError":    lastErr,
-		})
+		}
+		if valid {
+			updates["errorCode"] = nil
+			updates["lastErrorAt"] = nil
+			updates["backoffLevel"] = 0
+			updates["rateLimitedUntil"] = nil
+			if conn.Data != nil {
+				for k := range conn.Data {
+					if strings.HasPrefix(k, "modelLock_") {
+						updates[k] = nil
+					}
+				}
+			}
+		} else if errStr != "" {
+			updates["lastErrorAt"] = now
+		}
+		_, _ = repos.UpdateConnection(h.DB, id, updates)
 		results = append(results, testResult{
 			ConnectionID: id,
 			Valid:        valid,
@@ -383,6 +505,7 @@ func (h *Handler) HandleTestBatch(w http.ResponseWriter, r *http.Request) {
 			Refreshed:    refreshed,
 		})
 	}
+	providers.InvalidateConnectionCache()
 
 	h.JSON(w, http.StatusOK, map[string]any{
 		"success": true,
@@ -422,11 +545,28 @@ func (h *Handler) HandleProviderTest(w http.ResponseWriter, r *http.Request, id 
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, _ = repos.UpdateConnection(h.DB, id, map[string]any{
+	updates := map[string]any{
 		"testStatus":   testStatus,
 		"lastTestedAt": now,
 		"lastError":    lastErr,
-	})
+	}
+	if valid {
+		updates["errorCode"] = nil
+		updates["lastErrorAt"] = nil
+		updates["backoffLevel"] = 0
+		updates["rateLimitedUntil"] = nil
+		if conn.Data != nil {
+			for k := range conn.Data {
+				if strings.HasPrefix(k, "modelLock_") {
+					updates[k] = nil
+				}
+			}
+		}
+	} else if errStr != "" {
+		updates["lastErrorAt"] = now
+	}
+	_, _ = repos.UpdateConnection(h.DB, id, updates)
+	providers.InvalidateConnectionCache()
 
 	h.JSON(w, http.StatusOK, map[string]any{
 		"valid":     valid,
@@ -554,6 +694,10 @@ func (h *Handler) deleteProvider(w http.ResponseWriter, r *http.Request, id stri
 }
 
 func safeConnection(c repos.Connection) map[string]any {
+	errCode := c.ErrorCode
+	if c.TestStatus == "active" && c.LastError == "" {
+		errCode = 0
+	}
 	m := map[string]any{
 		"id":          c.ID,
 		"provider":    c.Provider,
@@ -567,7 +711,7 @@ func safeConnection(c repos.Connection) map[string]any {
 		"updatedAt":   c.UpdatedAt,
 		"testStatus":  c.TestStatus,
 		"lastError":   c.LastError,
-		"errorCode":   c.ErrorCode,
+		"errorCode":   errCode,
 		"lastErrorAt": c.LastErrorAt,
 		"lastUsedAt":  c.LastUsedAt,
 		"proxyPoolId": c.ProxyPoolID,
