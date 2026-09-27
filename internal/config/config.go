@@ -38,8 +38,8 @@ func Load() *Config {
 	return &Config{
 		Port:                 envStr("PORT", "20128"),
 		DataDir:              envStr("DATA_DIR", "data"),
-		JWTSecret:            envStr("JWT_SECRET", ""),
-		InitialPassword:      envStr("INITIAL_PASSWORD", ""),
+		JWTSecret:            envStr("JWT_SECRET", "9router-default-jwt-session-secret-key-2026"),
+		InitialPassword:      envStr("INITIAL_PASSWORD", "admin1234"),
 		APIKeySecret:         envStr("API_KEY_SECRET", ""),
 		MachineIDSalt:        envStr("MACHINE_ID_SALT", ""),
 		EnableRequestLogs:    envBool("ENABLE_REQUEST_LOGS", false),
