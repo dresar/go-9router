@@ -32,7 +32,10 @@ function getStatusDisplay(connected, error, errorCode) {
   if (connected > 0) {
     parts.push(
       <Badge key="connected" variant="success" size="sm" dot>
-        {connected} Connected
+        <span className="inline-flex items-center gap-1">
+          <span>{connected}</span>
+          <span>Connected</span>
+        </span>
       </Badge>,
     );
   }

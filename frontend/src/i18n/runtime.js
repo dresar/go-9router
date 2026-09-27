@@ -94,13 +94,20 @@ function processTextNode(node) {
   }
   if (node._originalText == null) node._originalText = current;
 
+  // Preserve leading and trailing whitespace that was in the source text node
+  const matchLeading = (node._originalText || "").match(/^\s+/);
+  const matchTrailing = (node._originalText || "").match(/\s+$/);
+  const leadingSpace = matchLeading ? matchLeading[0] : "";
+  const trailingSpace = matchTrailing ? matchTrailing[0] : "";
+
   // Translate from the recorded original so locale switches stay idempotent
   const translated = translate(node._originalText);
-  node._translated = translated;
+  const fullTranslation = leadingSpace + (translated ? translated.trim() : "") + trailingSpace;
+  node._translated = fullTranslation;
 
   // Only update if different to avoid unnecessary DOM mutations
-  if (translated !== node.nodeValue) {
-    node.nodeValue = translated;
+  if (fullTranslation !== node.nodeValue) {
+    node.nodeValue = fullTranslation;
   }
 }
 
