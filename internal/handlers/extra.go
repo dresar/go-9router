@@ -3,9 +3,12 @@ package handlers
 import (
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/dresar/go-9router/internal/providers"
 	"github.com/dresar/go-9router/internal/storage/repos"
 )
+
 
 func (h *Handler) HandleNodes(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -84,7 +87,8 @@ func (h *Handler) HandleNodeByID(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) HandleProxyPools(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		pools, err := repos.ListProxyPools(h.DB, false)
+		activeOnly := r.URL.Query().Get("isActive") == "true"
+		pools, err := repos.ListProxyPools(h.DB, activeOnly)
 		if err != nil {
 			h.JSONError(w, http.StatusInternalServerError, "failed to list proxy pools")
 			return
@@ -92,7 +96,10 @@ func (h *Handler) HandleProxyPools(w http.ResponseWriter, r *http.Request) {
 		if pools == nil {
 			pools = []repos.ProxyPool{}
 		}
-		h.JSON(w, http.StatusOK, map[string]any{"pools": pools})
+		h.JSON(w, http.StatusOK, map[string]any{
+			"proxyPools": pools,
+			"pools":      pools,
+		})
 	case http.MethodPost:
 		var body repos.ProxyPool
 		if err := h.DecodeJSON(r, &body); err != nil {
@@ -105,7 +112,10 @@ func (h *Handler) HandleProxyPools(w http.ResponseWriter, r *http.Request) {
 			h.JSONError(w, http.StatusInternalServerError, "failed to create proxy pool")
 			return
 		}
-		h.JSON(w, http.StatusCreated, map[string]any{"pool": created})
+		h.JSON(w, http.StatusCreated, map[string]any{
+			"proxyPool": created,
+			"pool":      created,
+		})
 	default:
 		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
@@ -128,7 +138,7 @@ func (h *Handler) HandleProxyPoolByID(w http.ResponseWriter, r *http.Request) {
 			h.JSONError(w, http.StatusNotFound, "not found")
 			return
 		}
-		h.JSON(w, http.StatusOK, map[string]any{"pool": p})
+		h.JSON(w, http.StatusOK, map[string]any{"proxyPool": p, "pool": p})
 	case http.MethodPut:
 		var body map[string]any
 		if err := h.DecodeJSON(r, &body); err != nil {
@@ -144,7 +154,8 @@ func (h *Handler) HandleProxyPoolByID(w http.ResponseWriter, r *http.Request) {
 			h.JSONError(w, http.StatusNotFound, "not found")
 			return
 		}
-		h.JSON(w, http.StatusOK, map[string]any{"pool": updated})
+		h.JSON(w, http.StatusOK, map[string]any{"proxyPool": updated, "pool": updated})
+
 	case http.MethodDelete:
 		if err := repos.DeleteProxyPool(h.DB, id); err != nil {
 			h.JSONError(w, http.StatusInternalServerError, "failed to delete proxy pool")
@@ -291,12 +302,55 @@ func (h *Handler) HandleNodeValidate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleProxyPoolTest(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	trimmed := strings.TrimPrefix(path, "/api/proxy-pools/")
+	id := strings.TrimSuffix(trimmed, "/test")
+	id = strings.Trim(id, "/")
+
+	if id == "" {
+		h.JSONError(w, http.StatusBadRequest, "missing pool id")
+		return
+	}
+
+	pool, err := repos.GetProxyPoolByID(h.DB, id)
+	if err != nil {
+		h.JSONError(w, http.StatusInternalServerError, "failed to get proxy pool")
+		return
+	}
+	if pool == nil {
+		h.JSONError(w, http.StatusNotFound, "proxy pool not found")
+		return
+	}
+
+	ok, status, elapsedMs, errStr := providers.TestProxyPool(pool)
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+
+	testStatus := "error"
+	if ok {
+		testStatus = "active"
+	}
+	var lastErr any
+	if !ok {
+		lastErr = errStr
+	}
+
+	_, _ = repos.UpdateProxyPool(h.DB, id, map[string]any{
+		"testStatus":   testStatus,
+		"lastTestedAt": now,
+		"lastError":    lastErr,
+		"isActive":     ok,
+	})
+
 	h.JSON(w, http.StatusOK, map[string]any{
-		"ok":        true,
-		"status":    200,
-		"elapsedMs": 35,
+		"ok":         ok,
+		"status":     status,
+		"statusText": http.StatusText(status),
+		"error":      lastErr,
+		"elapsedMs":  elapsedMs,
+		"testedAt":   now,
 	})
 }
+
 
 func (h *Handler) HandleProxyPoolDeploy(w http.ResponseWriter, r *http.Request) {
 	h.JSON(w, http.StatusOK, map[string]any{

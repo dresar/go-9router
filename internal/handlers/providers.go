@@ -324,16 +324,22 @@ func (h *Handler) deleteProvider(w http.ResponseWriter, r *http.Request, id stri
 
 func safeConnection(c repos.Connection) map[string]any {
 	m := map[string]any{
-		"id":        c.ID,
-		"provider":  c.Provider,
-		"authType":  c.AuthType,
-		"name":      c.Name,
-		"email":     c.Email,
-		"priority":  c.Priority,
-		"isActive":  c.IsActive,
-		"createdAt": c.CreatedAt,
-		"updatedAt": c.UpdatedAt,
-		"testStatus": c.TestStatus,
+		"id":          c.ID,
+		"provider":    c.Provider,
+		"authType":    c.AuthType,
+		"name":        c.Name,
+		"email":       c.Email,
+		"displayName": c.DisplayName,
+		"priority":    c.Priority,
+		"isActive":    c.IsActive,
+		"createdAt":   c.CreatedAt,
+		"updatedAt":   c.UpdatedAt,
+		"testStatus":  c.TestStatus,
+		"lastError":   c.LastError,
+		"errorCode":   c.ErrorCode,
+		"lastErrorAt": c.LastErrorAt,
+		"lastUsedAt":  c.LastUsedAt,
+		"proxyPoolId": c.ProxyPoolID,
 	}
 	if c.ProviderSpecificData != nil {
 		psd := map[string]any{}
@@ -346,3 +352,4 @@ func safeConnection(c repos.Connection) map[string]any {
 	}
 	return m
 }
+

@@ -37,6 +37,7 @@ type Connection struct {
 	LastUsedAt          string `json:"lastUsedAt,omitempty"`
 	ConsecutiveUseCount int    `json:"consecutiveUseCount,omitempty"`
 	DisplayName         string `json:"displayName,omitempty"`
+	ProxyPoolID         string `json:"proxyPoolId,omitempty"`
 
 	ProviderSpecificData map[string]any `json:"providerSpecificData,omitempty"`
 }
@@ -213,6 +214,9 @@ func connectionToData(c Connection) map[string]any {
 	if c.DisplayName != "" {
 		m["displayName"] = c.DisplayName
 	}
+	if c.ProxyPoolID != "" {
+		m["proxyPoolId"] = c.ProxyPoolID
+	}
 	if c.ProviderSpecificData != nil {
 		m["providerSpecificData"] = c.ProviderSpecificData
 	}
@@ -222,6 +226,24 @@ func connectionToData(c Connection) map[string]any {
 		}
 	}
 	return m
+}
+
+func (c Connection) MarshalJSON() ([]byte, error) {
+	m := connectionToData(c)
+	m["id"] = c.ID
+	m["provider"] = c.Provider
+	m["authType"] = c.AuthType
+	if c.Name != "" {
+		m["name"] = c.Name
+	}
+	if c.Email != "" {
+		m["email"] = c.Email
+	}
+	m["priority"] = c.Priority
+	m["isActive"] = c.IsActive
+	m["createdAt"] = c.CreatedAt
+	m["updatedAt"] = c.UpdatedAt
+	return json.Marshal(m)
 }
 
 func dataToConnection(id, provider, authType, name, email string, priority int, isActive bool, data map[string]any, createdAt string) Connection {
@@ -265,9 +287,18 @@ func dataToConnection(id, provider, authType, name, email string, priority int, 
 	c.DisplayName, _ = data["displayName"].(string)
 	if psd, ok := data["providerSpecificData"].(map[string]any); ok {
 		c.ProviderSpecificData = psd
+		if ppid, ok := psd["proxyPoolId"].(string); ok {
+			c.ProxyPoolID = ppid
+		}
+	}
+	if c.ProxyPoolID == "" {
+		if ppid, ok := data["proxyPoolId"].(string); ok {
+			c.ProxyPoolID = ppid
+		}
 	}
 	return c
 }
+
 
 func nvl(s string) sql.NullString {
 	if s == "" {

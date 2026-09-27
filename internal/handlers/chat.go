@@ -109,7 +109,7 @@ func (h *Handler) handleSingleChat(w http.ResponseWriter, r *http.Request, body 
 		body["model"] = modelID
 		providers.LogRequest(providerID, modelID, sel.Credentials.ConnectionName, stream.IsSSERequest(body))
 
-		adapter, known := adapters.GetAdapter(providerID)
+		adapter, known := adapters.GetAdapterWithCreds(providerID, sel.Credentials)
 		if !known {
 			h.JSONError(w, http.StatusNotImplemented,
 				fmt.Sprintf("provider '%s' not yet implemented. Use Node.js backend for this provider.", providerID),
@@ -123,7 +123,7 @@ func (h *Handler) handleSingleChat(w http.ResponseWriter, r *http.Request, body 
 			return
 		}
 
-		result, err := providers.DoUpstream(r.Context(), req)
+		result, err := providers.DoUpstreamWithProxy(r.Context(), req, h.DB, sel.Credentials)
 		if err != nil {
 			h.JSONError(w, http.StatusBadGateway, "upstream error")
 			return
@@ -179,7 +179,7 @@ func (h *Handler) trySingleChat(r *http.Request, body map[string]any, modelStr s
 		return nil
 	}
 	body["model"] = modelID
-	adapter, known := adapters.GetAdapter(providerID)
+	adapter, known := adapters.GetAdapterWithCreds(providerID, sel.Credentials)
 	if !known {
 		return nil
 	}
@@ -187,7 +187,7 @@ func (h *Handler) trySingleChat(r *http.Request, body map[string]any, modelStr s
 	if err != nil {
 		return nil
 	}
-	result, err := providers.DoUpstream(r.Context(), req)
+	result, err := providers.DoUpstreamWithProxy(r.Context(), req, h.DB, sel.Credentials)
 	if err != nil || !result.Success {
 		if result != nil && result.Response != nil {
 			result.Response.Body.Close()

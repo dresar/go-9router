@@ -10,16 +10,21 @@ import (
 )
 
 type ProxyPool struct {
-	ID         string         `json:"id"`
-	IsActive   bool           `json:"isActive"`
-	TestStatus string         `json:"testStatus,omitempty"`
-	Data       map[string]any `json:"-"`
-	CreatedAt  string         `json:"createdAt"`
-	UpdatedAt  string         `json:"updatedAt"`
+	ID                  string         `json:"id"`
+	IsActive            bool           `json:"isActive"`
+	TestStatus          string         `json:"testStatus,omitempty"`
+	Data                map[string]any `json:"-"`
+	CreatedAt           string         `json:"createdAt"`
+	UpdatedAt           string         `json:"updatedAt"`
 
-	ProxyURL    string `json:"proxyUrl,omitempty"`
-	Name        string `json:"name,omitempty"`
-	VercelURL   string `json:"vercelRelayUrl,omitempty"`
+	ProxyURL            string `json:"proxyUrl,omitempty"`
+	Name                string `json:"name,omitempty"`
+	Type                string `json:"type,omitempty"`
+	NoProxy             string `json:"noProxy,omitempty"`
+	StrictProxy         bool   `json:"strictProxy"`
+	LastTestedAt        string `json:"lastTestedAt,omitempty"`
+	LastError           string `json:"lastError,omitempty"`
+	VercelURL           string `json:"vercelRelayUrl,omitempty"`
 	CloudflareWorkerURL string `json:"cloudflareWorkerUrl,omitempty"`
 }
 
@@ -130,24 +135,47 @@ func scanPool(row interface{ Scan(...any) error }) (ProxyPool, error) {
 	return p, nil
 }
 
+func (p ProxyPool) MarshalJSON() ([]byte, error) {
+	m := poolToData(p)
+	m["id"] = p.ID
+	m["isActive"] = p.IsActive
+	if p.TestStatus != "" {
+		m["testStatus"] = p.TestStatus
+	}
+	m["createdAt"] = p.CreatedAt
+	m["updatedAt"] = p.UpdatedAt
+	return json.Marshal(m)
+}
+
 func poolToData(p ProxyPool) map[string]any {
 	m := map[string]any{}
+	for k, v := range p.Data {
+		m[k] = v
+	}
 	if p.ProxyURL != "" {
 		m["proxyUrl"] = p.ProxyURL
 	}
 	if p.Name != "" {
 		m["name"] = p.Name
 	}
+	if p.Type != "" {
+		m["type"] = p.Type
+	}
+	if p.NoProxy != "" {
+		m["noProxy"] = p.NoProxy
+	}
+	m["strictProxy"] = p.StrictProxy
+	if p.LastTestedAt != "" {
+		m["lastTestedAt"] = p.LastTestedAt
+	}
+	if p.LastError != "" {
+		m["lastError"] = p.LastError
+	}
 	if p.VercelURL != "" {
 		m["vercelRelayUrl"] = p.VercelURL
 	}
 	if p.CloudflareWorkerURL != "" {
 		m["cloudflareWorkerUrl"] = p.CloudflareWorkerURL
-	}
-	for k, v := range p.Data {
-		if _, exists := m[k]; !exists {
-			m[k] = v
-		}
 	}
 	return m
 }
@@ -159,7 +187,15 @@ func dataToPool(id string, isActive bool, testStatus string, data map[string]any
 	}
 	p.ProxyURL, _ = data["proxyUrl"].(string)
 	p.Name, _ = data["name"].(string)
+	p.Type, _ = data["type"].(string)
+	p.NoProxy, _ = data["noProxy"].(string)
+	if sp, ok := data["strictProxy"].(bool); ok {
+		p.StrictProxy = sp
+	}
+	p.LastTestedAt, _ = data["lastTestedAt"].(string)
+	p.LastError, _ = data["lastError"].(string)
 	p.VercelURL, _ = data["vercelRelayUrl"].(string)
 	p.CloudflareWorkerURL, _ = data["cloudflareWorkerUrl"].(string)
 	return p
 }
+

@@ -2,6 +2,7 @@ package providers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ type Credentials struct {
 	ExpiresAt            string
 	ProjectID            string
 	BaseURL              string
+	ProxyPoolID          string
 	ProviderSpecificData map[string]any
 }
 
@@ -89,6 +91,9 @@ func connectionToCredentials(c repos.Connection) *Credentials {
 		name = c.ID[:8]
 	}
 	baseURL, _ := c.ProviderSpecificData["baseUrl"].(string)
+	if baseURL == "" {
+		baseURL, _ = c.ProviderSpecificData["baseURL"].(string)
+	}
 	return &Credentials{
 		ConnectionID:         c.ID,
 		ConnectionName:       name,
@@ -100,6 +105,7 @@ func connectionToCredentials(c repos.Connection) *Credentials {
 		ExpiresAt:            c.ExpiresAt,
 		ProjectID:            c.ProjectID,
 		BaseURL:              baseURL,
+		ProxyPoolID:          c.ProxyPoolID,
 		ProviderSpecificData: c.ProviderSpecificData,
 	}
 }
@@ -141,5 +147,61 @@ func ResolveModelProvider(modelStr string, db *sql.DB) (provider, model string, 
 			}
 		}
 	}
+
+	// Check customModels in KV
+	rows, err := db.Query(`SELECT value FROM kv WHERE scope = 'customModels'`)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var valStr string
+			if err := rows.Scan(&valStr); err == nil {
+				var cm struct {
+					ID            string `json:"id"`
+					Provider      string `json:"provider"`
+					ProviderAlias string `json:"providerAlias"`
+				}
+				if json.Unmarshal([]byte(valStr), &cm) == nil {
+					if cm.ID == modelStr {
+						prov := cm.ProviderAlias
+						if prov == "" {
+							prov = cm.Provider
+						}
+						if prov != "" {
+							return prov, modelStr, true
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Well-known prefix heuristics for bare model names
+	lower := strings.ToLower(modelStr)
+	if strings.HasPrefix(lower, "gemini-") || strings.HasPrefix(lower, "gemma-") {
+		return "gemini", modelStr, true
+	}
+	if strings.HasPrefix(lower, "claude-") {
+		return "anthropic", modelStr, true
+	}
+	if strings.HasPrefix(lower, "gpt-") || strings.HasPrefix(lower, "o1") || strings.HasPrefix(lower, "o3") || strings.HasPrefix(lower, "chatgpt") {
+		return "openai", modelStr, true
+	}
+	if strings.HasPrefix(lower, "deepseek-") {
+		return "deepseek", modelStr, true
+	}
+	if strings.HasPrefix(lower, "llama-") || strings.HasPrefix(lower, "mixtral") {
+		return "groq", modelStr, true
+	}
+	if strings.HasPrefix(lower, "grok-") {
+		return "xai", modelStr, true
+	}
+	if strings.HasPrefix(lower, "kimi-") {
+		return "kimi", modelStr, true
+	}
+	if strings.HasPrefix(lower, "qwen") {
+		return "together", modelStr, true
+	}
+
 	return "", modelStr, false
 }
+

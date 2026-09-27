@@ -9,6 +9,9 @@ import (
 )
 
 func New(h *handlers.Handler, jwtSecret string) http.Handler {
+	if jwtSecret == "" {
+		jwtSecret = "9router-default-jwt-session-secret-key-2026"
+	}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/health", h.HandleHealth)
