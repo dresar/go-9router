@@ -58,17 +58,19 @@ func (h *Handler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	secure := h.Cfg.AuthCookieSecure
+	secure := false
 	sameSite := http.SameSiteLaxMode
-	http.SetCookie(w, &http.Cookie{
-		Name:     auth.CookieName(),
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: sameSite,
-		Expires:  time.Now().Add(30 * 24 * time.Hour),
-	})
+	for _, cName := range []string{"auth_token", "9r_session"} {
+		http.SetCookie(w, &http.Cookie{
+			Name:     cName,
+			Value:    token,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   secure,
+			SameSite: sameSite,
+			Expires:  time.Now().Add(30 * 24 * time.Hour),
+		})
+	}
 	h.JSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
@@ -77,14 +79,16 @@ func (h *Handler) HandleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     auth.CookieName(),
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		MaxAge:   -1,
-		Expires:  time.Unix(0, 0),
-	})
+	for _, cName := range []string{"auth_token", "9r_session"} {
+		http.SetCookie(w, &http.Cookie{
+			Name:     cName,
+			Value:    "",
+			Path:     "/",
+			HttpOnly: true,
+			MaxAge:   -1,
+			Expires:  time.Unix(0, 0),
+		})
+	}
 	h.JSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
@@ -107,7 +111,10 @@ func (h *Handler) HandleAuthStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func extractToken(r *http.Request) string {
-	if c, err := r.Cookie(auth.CookieName()); err == nil && c.Value != "" {
+	if c, err := r.Cookie("auth_token"); err == nil && c.Value != "" {
+		return c.Value
+	}
+	if c, err := r.Cookie("9r_session"); err == nil && c.Value != "" {
 		return c.Value
 	}
 	hdr := r.Header.Get("Authorization")

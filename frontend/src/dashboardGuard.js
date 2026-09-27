@@ -168,7 +168,7 @@ async function canAccessLocalOnlyRoute(request) {
 }
 
 async function hasValidToken(request) {
-  const token = request.cookies.get("auth_token")?.value;
+  const token = request.cookies.get("auth_token")?.value || request.cookies.get("9r_session")?.value;
   return await verifyDashboardAuthToken(token);
 }
 
@@ -263,12 +263,10 @@ export async function proxy(request) {
     if (!requireLogin) return NextResponse.next();
 
     // Verify JWT token
-    const token = request.cookies.get("auth_token")?.value;
+    const token = request.cookies.get("auth_token")?.value || request.cookies.get("9r_session")?.value;
     if (token) {
       if (await verifyDashboardAuthToken(token)) {
         return NextResponse.next();
-      } else {
-        return NextResponse.redirect(new URL("/login", request.url));
       }
     }
 
