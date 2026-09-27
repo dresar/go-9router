@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Card, Button, Input, Modal, Toggle, ConfirmModal } from "@/shared/components";
+import { Card, Button, Input, Modal, Toggle, ConfirmModal, Badge } from "@/shared/components";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import { getCurrentLocale, onLocaleChange } from "@/i18n/runtime";
 import {
@@ -12,7 +12,7 @@ import {
 
 const SAMPLE_TEMPLATES = {
   gitDiff: {
-    label: "Git Diff (Tool Agent)",
+    label: "Git Diff",
     mode: "rtk",
     text: `diff --git a/internal/handlers/chat.go b/internal/handlers/chat.go
 index 8f23a10..b41e992 100644
@@ -26,7 +26,7 @@ index 8f23a10..b41e992 100644
  	requireKey := repos.SettingBool(settings, "requireApiKey", h.Cfg.RequireAPIKey)`,
   },
   grepLog: {
-    label: "Ripgrep Search Log",
+    label: "Ripgrep",
     mode: "rtk",
     text: `frontend/src/shared/components/Sidebar.js:27:  { href: "/token-saver", label: "Token Saver", icon: "savings" },
 frontend/src/shared/components/Header.js:115:  if (pathname.includes("/token-saver"))
@@ -35,7 +35,7 @@ internal/router/router.go:121:  mux.HandleFunc("/api/token-saver/test", h.Handle
 internal/tokensaver/tokensaver.go:42:func CompressToolOutput(text string) (string, string)`,
   },
   treeDir: {
-    label: "Directory Tree (tree)",
+    label: "Tree",
     mode: "rtk",
     text: `.
 ├── cmd
@@ -51,9 +51,9 @@ internal/tokensaver/tokensaver.go:42:func CompressToolOutput(text string) (strin
     └── src`,
   },
   verboseLLM: {
-    label: "Basa-Basi LLM (Caveman Test)",
+    label: "Verbose LLM",
     mode: "caveman",
-    text: `Tentu saja! Saya dengan senang hati akan membantu Anda menyelesaikan masalah ini. Berdasarkan analisis mendalam terhadap kode Anda, masalah utama yang menyebabkan kesalahan tersebut adalah adanya pengecekan ganda pada middleware otentikasi. Anda dapat memperbaikinya dengan menghapus baris kode yang redundan pada berkas auth.go. Semoga penjelasan ini bermanfaat dan jangan ragu untuk bertanya lagi jika Anda memiliki pertanyaan lain!`,
+    text: `Of course! I would be more than happy to help you resolve this issue. Based on a thorough analysis of your codebase, the primary problem that is causing this error is a redundant check in your authentication middleware. You can resolve this by removing the duplicate check inside auth.go. Please let me know if you need any further assistance!`,
   },
 };
 
@@ -99,7 +99,7 @@ export default function TokenSaverClient() {
   const [sandboxResult, setSandboxResult] = useState(null);
   const [sandboxLoading, setSandboxLoading] = useState(false);
 
-  const { copied, copy } = useCopyToClipboard();
+  const { copied, copy } = useCopyToClipboard(2000);
 
   useEffect(() => {
     setLocale(getCurrentLocale());
@@ -127,7 +127,7 @@ export default function TokenSaverClient() {
         body: JSON.stringify(patch),
       });
     } catch (error) {
-      console.log("Error updating setting:", error);
+      console.error("Error updating setting:", error);
     }
   };
 
@@ -140,7 +140,7 @@ export default function TokenSaverClient() {
       });
       if (res.ok) setRtkEnabledState(value);
     } catch (error) {
-      console.log("Error updating rtkEnabled:", error);
+      console.error("Error updating rtkEnabled:", error);
     }
   };
 
@@ -334,7 +334,7 @@ export default function TokenSaverClient() {
     if (pendingExtras.includes("ml")) {
       setExtrasConfirm({
         title: "Install [ml]",
-        message: "[ml] downloads ~1 GB (torch + huggingface-hub). Continue?",
+        message: "Download ~1 GB (torch + huggingface-hub)?",
         confirmText: "Install",
         variant: "primary",
         onConfirm: installExtrasConfirmed,
@@ -347,7 +347,7 @@ export default function TokenSaverClient() {
   const handleRemoveExtra = useCallback((extra) => {
     setExtrasConfirm({
       title: `Remove [${extra}]`,
-      message: `Remove [${extra}] and its packages?`,
+      message: `Remove [${extra}] packages?`,
       confirmText: "Remove",
       variant: "danger",
       onConfirm: () => removeExtraConfirmed(extra),
@@ -456,7 +456,6 @@ export default function TokenSaverClient() {
     }
   };
 
-  // Live Test Sandbox Runner
   const runSandboxTest = async () => {
     if (!sandboxInput.trim()) return;
     setSandboxLoading(true);
@@ -474,9 +473,10 @@ export default function TokenSaverClient() {
         const data = await res.json();
         setSandboxResult(data);
       } else {
-        // Fallback simulation
         const origLen = sandboxInput.length;
-        const fakeComp = sandboxInput.replace(/^diff --git.*$/gm, "diff --git").replace(/^index .*$/gm, "");
+        const fakeComp = sandboxInput
+          .replace(/^diff --git.*$/gm, "diff --git")
+          .replace(/^index .*$/gm, "");
         setSandboxResult({
           originalText: sandboxInput,
           compressedText: fakeComp,
@@ -504,7 +504,8 @@ export default function TokenSaverClient() {
           setRtkEnabledState(data.rtkEnabled !== false);
           setHeadroomEnabled(!!data.headroomEnabled);
           setHeadroomUrl(data.headroomUrl || "http://localhost:8787");
-          if (typeof data.headroomTimeoutMs === "number") setHeadroomTimeoutMs(data.headroomTimeoutMs);
+          if (typeof data.headroomTimeoutMs === "number")
+            setHeadroomTimeoutMs(data.headroomTimeoutMs);
           setCodeAware(data.headroomCodeAware === true);
           setKompress(data.headroomKompress !== false);
           setCavemanEnabled(!!data.cavemanEnabled);
@@ -520,191 +521,180 @@ export default function TokenSaverClient() {
 
   const headroomRunning = !!headroomStatus.running;
   const headroomStatusLabel = headroomStatus.loading
-    ? "Memeriksa…"
+    ? "Checking..."
     : headroomRunning
-      ? "Aktif"
+      ? "Active"
       : headroomStatus.localUrl !== false && !headroomStatus.installed
-        ? "Belum Terpasang"
+        ? "Not Installed"
         : headroomStatus.localUrl !== false
-          ? "Berhenti"
-          : "Eksternal";
+          ? "Stopped"
+          : "External";
+
   const headroomLocalUrl = headroomStatus.localUrl !== false;
   const headroomCanStart = !!headroomStatus.canStart;
   const headroomManaged = headroomLocalUrl && !!headroomStatus.managedPid;
 
-  const activeCount = (rtkEnabled ? 1 : 0) + (cavemanEnabled ? 1 : 0) + (ponytailEnabled ? 1 : 0) + (headroomEnabled ? 1 : 0);
+  const activeCount =
+    (rtkEnabled ? 1 : 0) +
+    (cavemanEnabled ? 1 : 0) +
+    (ponytailEnabled ? 1 : 0) +
+    (headroomEnabled ? 1 : 0);
 
   return (
-    <div className="space-y-6 p-4 sm:p-6 max-w-6xl mx-auto">
-      {/* Top Banner & Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-border/70 pb-5">
+    <div className="flex min-w-0 flex-col gap-6 pb-12">
+      {/* 1. Header Banner & Quick Presets */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <span className="material-symbols-outlined text-primary text-2xl">
-              bolt
-            </span>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
-              Token Saver Engine
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold tracking-tight text-text-main">
+              Token Saver
             </h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[5px] text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-              {activeCount} / 4 Aktif
-            </span>
+            <Badge variant="primary" size="sm">
+              {activeCount} / 4 Active
+            </Badge>
           </div>
-          <p className="text-sm text-text-muted mt-1">
-            Kompresi output tool AI Agent (RTK), peringkasan respons LLM (Caveman), kode minimalis (Ponytail), & optimasi konteks prompts.
+          <p className="text-xs text-text-muted mt-1">
+            Context optimization & tool output compression.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-text-muted font-medium">Preset Cepat:</span>
-          <button
-            type="button"
+        {/* Quick Presets */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon="smart_toy"
             onClick={() => applyPreset("agent")}
-            className="px-2.5 py-1.5 rounded-[5px] text-xs font-medium border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 active:scale-[0.98] transition-all"
-            title="Optimasi khusus Claude Code CLI, Hermes Agent, dan coding agents"
           >
-            🤖 Coding Agent
-          </button>
-          <button
-            type="button"
+            Agent
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon="bolt"
             onClick={() => applyPreset("max")}
-            className="px-2.5 py-1.5 rounded-[5px] text-xs font-medium border border-border bg-surface-2 text-text hover:border-primary/40 active:scale-[0.98] transition-all"
-            title="Hemat kuota maksimal (Ultra mode)"
           >
-            ⚡ Max Saver
-          </button>
-          <button
-            type="button"
+            Max
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon="balance"
             onClick={() => applyPreset("balanced")}
-            className="px-2.5 py-1.5 rounded-[5px] text-xs font-medium border border-border bg-surface-2 text-text hover:border-primary/40 active:scale-[0.98] transition-all"
           >
-            ⚖️ Balanced
-          </button>
-          <button
-            type="button"
+            Balanced
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="block"
             onClick={() => applyPreset("raw")}
-            className="px-2 py-1.5 rounded-[5px] text-xs font-medium border border-border text-text-muted hover:text-text active:scale-[0.98] transition-all"
           >
             Off
-          </button>
+          </Button>
         </div>
       </div>
 
-      {/* KPI Performance Metric Grid */}
+      {/* 2. Compact Performance KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <div className="p-3.5 rounded-lg border border-border/80 bg-surface-1">
-          <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Estimasi Terhemat</p>
-          <p className="text-xl sm:text-2xl font-bold text-success mt-1">60% – 90%</p>
-          <p className="text-[11px] text-text-muted mt-0.5">Pada log & output tool agent</p>
-        </div>
-        <div className="p-3.5 rounded-lg border border-border/80 bg-surface-1">
-          <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Latensi Eksekusi</p>
-          <p className="text-xl sm:text-2xl font-bold text-primary mt-1">&lt; 1 ms</p>
-          <p className="text-[11px] text-text-muted mt-0.5">In-memory lock-free Go buffer</p>
-        </div>
-        <div className="p-3.5 rounded-lg border border-border/80 bg-surface-1">
-          <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Agent Tool Hooks</p>
-          <p className="text-xl sm:text-2xl font-bold text-text mt-1">Hermes & Claude</p>
-          <p className="text-[11px] text-text-muted mt-0.5">Otomatis kompresi tool_results</p>
-        </div>
-        <div className="p-3.5 rounded-lg border border-border/80 bg-surface-1">
-          <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">MCP Protocol</p>
-          <p className="text-xl sm:text-2xl font-bold text-accent mt-1">SSE Bridge</p>
-          <p className="text-[11px] text-text-muted mt-0.5">Siap di /api/mcp/:plugin/sse</p>
-        </div>
+        <Card padding="xs" className="p-3">
+          <p className="text-[11px] font-medium text-text-muted uppercase">Saved</p>
+          <p className="text-xl font-bold text-green-500 mt-0.5">60% – 90%</p>
+          <p className="text-[10px] text-text-muted mt-0.5 truncate">Tool outputs</p>
+        </Card>
+        <Card padding="xs" className="p-3">
+          <p className="text-[11px] font-medium text-text-muted uppercase">Latency</p>
+          <p className="text-xl font-bold text-brand-500 mt-0.5">&lt; 1 ms</p>
+          <p className="text-[10px] text-text-muted mt-0.5 truncate">Go buffer</p>
+        </Card>
+        <Card padding="xs" className="p-3">
+          <p className="text-[11px] font-medium text-text-muted uppercase">Agent Tools</p>
+          <p className="text-xl font-bold text-text-main mt-0.5">Active</p>
+          <p className="text-[10px] text-text-muted mt-0.5 truncate">Hermes & Claude</p>
+        </Card>
+        <Card padding="xs" className="p-3">
+          <p className="text-[11px] font-medium text-text-muted uppercase">MCP Bridge</p>
+          <p className="text-xl font-bold text-blue-500 mt-0.5">SSE</p>
+          <p className="text-[10px] text-text-muted mt-0.5 truncate">Stdio to stream</p>
+        </Card>
       </div>
 
-      {/* Core Optimization Modules Card */}
-      <Card id="rtk" className="space-y-6">
-        {/* Module 1: RTK Tool Output Compressor */}
-        <div className="flex items-start justify-between gap-4 pb-5 border-b border-border">
+      {/* 3. Core Optimization Modules Card */}
+      <Card padding="sm" className="space-y-4">
+        <div className="flex items-center justify-between border-b border-border-subtle pb-2.5">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-brand-500 text-[20px]">
+              tune
+            </span>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+              Modules
+            </h2>
+          </div>
+        </div>
+
+        {/* Module 1: RTK Compressor */}
+        <div className="flex items-start justify-between gap-4 pb-4 border-b border-border-subtle">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="material-symbols-outlined text-primary text-xl">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="material-symbols-outlined text-brand-500 text-[18px]">
                 terminal
               </span>
-              <p className="font-semibold text-base">
-                RTK Tool Output Compression
-              </p>
-              <a
-                href="https://github.com/rtk-ai/rtk"
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-primary underline hover:opacity-80"
-              >
-                (Rust Token-Saver)
-              </a>
-              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-[5px] ${rtkEnabled ? "bg-success/15 text-success border border-success/30" : "bg-surface-2 text-text-muted border border-border"}`}>
-                {rtkEnabled ? "Aktif (Otomatis)" : "Bypass"}
+              <span className="font-semibold text-sm text-text-main">
+                RTK Compressor
               </span>
+              <Badge variant={rtkEnabled ? "success" : "default"} size="sm">
+                {rtkEnabled ? "Active" : "Bypass"}
+              </Badge>
             </div>
-            <p className="text-sm text-text-muted mt-1.5">
-              Mendeteksi dan mengompresi payload eksekusi tools AI Agent (Hermes, Claude Code, OpenCode, Aider) seperti <code className="text-xs bg-surface-2 px-1 py-0.5 rounded text-text">git diff</code>, <code className="text-xs bg-surface-2 px-1 py-0.5 rounded text-text">git status</code>, <code className="text-xs bg-surface-2 px-1 py-0.5 rounded text-text">ripgrep</code>, <code className="text-xs bg-surface-2 px-1 py-0.5 rounded text-text">tree</code>, <code className="text-xs bg-surface-2 px-1 py-0.5 rounded text-text">npm/cargo build</code> sebelum dikirim kembali ke LLM.
+            <p className="text-xs text-text-muted mt-1">
+              Compresses CLI & agent tool execution outputs.
             </p>
-            <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
-              <span className="text-[11px] text-text-muted">Filter Aktif:</span>
-              {["git-diff", "git-log", "git-status", "grep/rg", "build-log", "tree", "ls", "smart-truncate"].map((f) => (
-                <span key={f} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-2 border border-border text-text-muted">
+            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+              {["git-diff", "git-log", "grep", "tree", "build"].map((f) => (
+                <span
+                  key={f}
+                  className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-2 border border-border-subtle text-text-muted"
+                >
                   {f}
                 </span>
               ))}
             </div>
           </div>
           <div className="pt-1">
-            <Toggle
-              checked={rtkEnabled}
-              onChange={() => handleRtkEnabled(!rtkEnabled)}
-            />
+            <Toggle checked={rtkEnabled} onChange={() => handleRtkEnabled(!rtkEnabled)} />
           </div>
         </div>
 
-        {/* Module 2: Caveman (Terse LLM Output) */}
-        <div className="flex items-start justify-between gap-4 pb-5 border-b border-border">
+        {/* Module 2: Caveman Terse Mode */}
+        <div className="flex items-start justify-between gap-4 pb-4 border-b border-border-subtle">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="material-symbols-outlined text-warning text-xl">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="material-symbols-outlined text-amber-500 text-[18px]">
                 speaker_notes_off
               </span>
-              <p className="font-semibold text-base">
-                Caveman Terse Mode
-              </p>
-              <a
-                href="https://github.com/JuliusBrussee/caveman"
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-primary underline hover:opacity-80"
-              >
-                (Caveman Protocol)
-              </a>
-              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-[5px] ${cavemanEnabled ? "bg-success/15 text-success border border-success/30" : "bg-surface-2 text-text-muted border border-border"}`}>
-                {cavemanEnabled ? `Aktif (${cavemanLevel})` : "Nonaktif"}
+              <span className="font-semibold text-sm text-text-main">
+                Caveman Mode
               </span>
+              <Badge variant={cavemanEnabled ? "success" : "default"} size="sm">
+                {cavemanEnabled ? `Active (${cavemanLevel})` : "Off"}
+              </Badge>
             </div>
-            <p className="text-sm text-text-muted mt-1.5">
-              Menginjeksi instruksi sistem gaya *caveman/terse* untuk memangkas basa-basi AI (sopan santun berlebih, pengantar panjang). Menghemat ~65% hingga 87% output token dengan tetap mempertahankan kode dan logika teknis 100% presisi.
+            <p className="text-xs text-text-muted mt-1">
+              Trims conversational fluff while preserving code logic.
             </p>
 
             {cavemanEnabled && (
-              <div className="mt-3 flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-text-muted font-medium">Tingkat Intensitas:</span>
+              <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
                 {visibleCavemanLevels.map((lvl) => (
-                  <button
+                  <Button
                     key={lvl.id}
+                    variant={cavemanLevel === lvl.id ? "primary" : "secondary"}
+                    size="sm"
                     onClick={() => handleCavemanLevel(lvl.id)}
-                    className={`px-3 py-1.5 rounded-[5px] text-xs font-medium border transition-all active:scale-[0.98] ${
-                      cavemanLevel === lvl.id
-                        ? "bg-primary text-white border-primary shadow-xs"
-                        : "bg-surface-2 border-border text-text-muted hover:border-primary/40 hover:text-text"
-                    }`}
-                    title={lvl.desc}
                   >
                     {lvl.label}
-                  </button>
+                  </Button>
                 ))}
-                <span className="text-xs text-primary font-medium ml-1">
-                  — {CAVEMAN_LEVELS.find((lvl) => lvl.id === cavemanLevel)?.desc}
-                </span>
               </div>
             )}
           </div>
@@ -716,52 +706,36 @@ export default function TokenSaverClient() {
           </div>
         </div>
 
-        {/* Module 3: Ponytail (Lazy Senior Dev) */}
-        <div className="flex items-start justify-between gap-4 pb-5 border-b border-border">
+        {/* Module 3: Ponytail Lazy Senior Dev */}
+        <div className="flex items-start justify-between gap-4 pb-4 border-b border-border-subtle">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="material-symbols-outlined text-purple-400 text-xl">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="material-symbols-outlined text-purple-400 text-[18px]">
                 psychology
               </span>
-              <p className="font-semibold text-base">
-                Ponytail (Lazy Senior Dev Prompt)
-              </p>
-              <a
-                href="https://github.com/DietrichGebert/ponytail"
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-primary underline hover:opacity-80"
-              >
-                (Ponytail)
-              </a>
-              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-[5px] ${ponytailEnabled ? "bg-success/15 text-success border border-success/30" : "bg-surface-2 text-text-muted border border-border"}`}>
-                {ponytailEnabled ? `Aktif (${ponytailLevel})` : "Nonaktif"}
+              <span className="font-semibold text-sm text-text-main">
+                Ponytail Mode
               </span>
+              <Badge variant={ponytailEnabled ? "success" : "default"} size="sm">
+                {ponytailEnabled ? `Active (${ponytailLevel})` : "Off"}
+              </Badge>
             </div>
-            <p className="text-sm text-text-muted mt-1.5">
-              Mengarahkan AI untuk menulis kode seringkas mungkin: memprioritaskan YAGNI (You Aren't Gonna Need It), mendahulukan Go/JS standard library, menghapus kode lama daripada menambah abstraksi rumit, dan meminimalkan ukuran git diff.
+            <p className="text-xs text-text-muted mt-1">
+              Enforces concise code, standard libraries, and minimal diffs.
             </p>
 
             {ponytailEnabled && (
-              <div className="mt-3 flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-text-muted font-medium">Mode:</span>
+              <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
                 {PONYTAIL_LEVELS.map((lvl) => (
-                  <button
+                  <Button
                     key={lvl.id}
+                    variant={ponytailLevel === lvl.id ? "primary" : "secondary"}
+                    size="sm"
                     onClick={() => handlePonytailLevel(lvl.id)}
-                    className={`px-3 py-1.5 rounded-[5px] text-xs font-medium border transition-all active:scale-[0.98] ${
-                      ponytailLevel === lvl.id
-                        ? "bg-primary text-white border-primary shadow-xs"
-                        : "bg-surface-2 border-border text-text-muted hover:border-primary/40 hover:text-text"
-                    }`}
-                    title={lvl.desc}
                   >
                     {lvl.label}
-                  </button>
+                  </Button>
                 ))}
-                <span className="text-xs text-primary font-medium ml-1">
-                  — {PONYTAIL_LEVELS.find((lvl) => lvl.id === ponytailLevel)?.desc}
-                </span>
               </div>
             )}
           </div>
@@ -773,103 +747,92 @@ export default function TokenSaverClient() {
           </div>
         </div>
 
-        {/* Module 4: Headroom (Context Compression Sidecar) */}
+        {/* Module 4: Headroom Context Compression Sidecar */}
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="material-symbols-outlined text-blue-400 text-xl">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="material-symbols-outlined text-blue-400 text-[18px]">
                 memory
               </span>
-              <p className="font-semibold text-base">
-                Headroom Context Compression
-              </p>
-              <a
-                href="https://github.com/chopratejas/headroom"
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-primary underline hover:opacity-80"
-              >
-                (Headroom)
-              </a>
-              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-[5px] ${headroomRunning ? "bg-success/15 text-success border border-success/30" : "bg-warning/15 text-warning border border-warning/30"}`}>
-                {headroomStatusLabel}
+              <span className="font-semibold text-sm text-text-main">
+                Headroom Sidecar
               </span>
-              <button
-                type="button"
+              <Badge variant={headroomRunning ? "success" : "warning"} size="sm">
+                {headroomStatusLabel}
+              </Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon="settings"
                 onClick={() => setShowHeadroomInstallModal(true)}
-                className="text-xs text-primary underline hover:opacity-80 font-medium"
               >
-                {headroomRunning ? "Kelola" : "Konfigurasi"}
-              </button>
+                Configure
+              </Button>
             </div>
-            <p className="text-sm text-text-muted mt-1.5">
-              Mengompresi konteks riwayat percakapan panjang menggunakan parser AST tree-sitter untuk kode pemrograman dan model ML Kompress-v2 untuk teks panjang via <code className="text-xs bg-surface-2 px-1 py-0.5 rounded text-text">/v1/compress</code>.
+            <p className="text-xs text-text-muted mt-1">
+              AST code compression and semantic text summarization.
             </p>
 
             {headroomStatus.installed && (
-              <div className="mt-3 p-3 rounded-lg border border-border bg-surface-2/60">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-medium text-text-muted">
-                    Modul Tambahan {headroomExtras.version ? `(v${headroomExtras.version})` : ""}:
-                  </span>
-                  {headroomExtras.available.map((extra) => {
-                    const installed = !!headroomExtras.extras[extra];
-                    const pending = pendingExtras.includes(extra);
-                    if (installed) {
-                      const active = extra === "code" ? codeAware : kompress;
-                      return (
-                        <div
-                          key={extra}
-                          className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-[5px] border border-success/40 bg-success/5 text-text"
-                        >
-                          <Toggle
-                            size="sm"
-                            checked={active}
-                            disabled={restartingProxy}
-                            onChange={() => toggleExtraActive(extra, !active)}
-                          />
-                          <span className="font-semibold">[{extra}]</span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveExtra(extra)}
-                            disabled={removingExtra === extra}
-                            className="ml-1 text-[11px] text-error hover:underline disabled:opacity-50"
-                          >
-                            {removingExtra === extra ? "Menghapus…" : "Hapus"}
-                          </button>
-                        </div>
-                      );
-                    }
+              <div className="mt-2.5 p-2.5 rounded-[10px] border border-border-subtle bg-surface-2 flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-medium text-text-muted">Extras:</span>
+                {headroomExtras.available.map((extra) => {
+                  const installed = !!headroomExtras.extras[extra];
+                  const pending = pendingExtras.includes(extra);
+                  if (installed) {
+                    const active = extra === "code" ? codeAware : kompress;
                     return (
-                      <label
+                      <div
                         key={extra}
-                        className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-[5px] border cursor-pointer transition-colors ${
-                          pending
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border text-text-muted hover:bg-surface-2"
-                        }`}
+                        className="flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-[6px] border border-green-500/30 bg-green-500/10 text-text-main"
                       >
-                        <input
-                          type="checkbox"
-                          className="w-3 h-3"
-                          checked={pending}
-                          onChange={() => togglePendingExtra(extra)}
+                        <Toggle
+                          size="sm"
+                          checked={active}
+                          disabled={restartingProxy}
+                          onChange={() => toggleExtraActive(extra, !active)}
                         />
-                        <span className="font-medium">[{extra}]</span>
-                        <span className="opacity-70 text-[10px]">belum pasang</span>
-                      </label>
+                        <span className="font-semibold">[{extra}]</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveExtra(extra)}
+                          disabled={removingExtra === extra}
+                          className="ml-1 text-[10px] text-red-400 hover:underline disabled:opacity-50 cursor-pointer"
+                        >
+                          {removingExtra === extra ? "..." : "Remove"}
+                        </button>
+                      </div>
                     );
-                  })}
-                  {pendingExtras.length > 0 && (
-                    <button
-                      onClick={handleInstallExtras}
-                      disabled={extrasActionLoading}
-                      className="text-xs px-2.5 py-1 rounded-[5px] bg-primary text-white hover:opacity-90 disabled:opacity-50 font-medium"
+                  }
+                  return (
+                    <label
+                      key={extra}
+                      className={`flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-[6px] border cursor-pointer ${
+                        pending
+                          ? "border-brand-500 bg-brand-500/10 text-brand-500"
+                          : "border-border-subtle text-text-muted hover:bg-surface-3"
+                      }`}
                     >
-                      {extrasActionLoading ? "Mengunduh…" : `Pasang [${pendingExtras.join(",")}]`}
-                    </button>
-                  )}
-                </div>
+                      <input
+                        type="checkbox"
+                        className="w-3 h-3 accent-brand-500"
+                        checked={pending}
+                        onChange={() => togglePendingExtra(extra)}
+                      />
+                      <span>[{extra}]</span>
+                    </label>
+                  );
+                })}
+                {pendingExtras.length > 0 && (
+                  <Button
+                    size="sm"
+                    loading={extrasActionLoading}
+                    disabled={extrasActionLoading}
+                    onClick={handleInstallExtras}
+                  >
+                    Install
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -882,300 +845,311 @@ export default function TokenSaverClient() {
         </div>
       </Card>
 
-      {/* Interactive Live Test Sandbox / Playground */}
-      <Card className="border border-primary/20 bg-gradient-to-b from-surface-1 to-surface-2/40 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary text-xl">
-                biotech
-              </span>
-              <h2 className="text-base font-bold">
-                Interactive Test Sandbox (Uji Coba Kompresi Langsung)
-              </h2>
-            </div>
-            <p className="text-xs text-text-muted mt-0.5">
-              Paste output eksekusi tool CLI agent Anda atau pilih sample di bawah untuk melihat hasil kompresi secara instan.
-            </p>
+      {/* 4. Interactive Test Sandbox */}
+      <Card padding="sm" className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border-subtle pb-2.5">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-brand-500 text-[20px]">
+              biotech
+            </span>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+              Sandbox
+            </h2>
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap">
             {Object.entries(SAMPLE_TEMPLATES).map(([k, s]) => (
-              <button
+              <Button
                 key={k}
-                type="button"
+                variant="secondary"
+                size="sm"
                 onClick={() => {
                   setSandboxInput(s.text);
                   setSandboxMode(s.mode);
                   setSandboxResult(null);
                 }}
-                className="px-2.5 py-1 rounded-[5px] text-[11px] font-medium border border-border bg-surface-1 text-text-muted hover:text-text hover:border-primary/40 active:scale-[0.98] transition-all"
               >
                 {s.label}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
 
         <div className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-text-muted font-medium">Mode Pengujian:</span>
-              <button
-                type="button"
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant={sandboxMode === "rtk" ? "primary" : "secondary"}
+                size="sm"
                 onClick={() => setSandboxMode("rtk")}
-                className={`px-2.5 py-1 rounded-[5px] text-xs font-medium border ${sandboxMode === "rtk" ? "bg-primary text-white border-primary" : "border-border text-text-muted"}`}
               >
-                RTK Tool Filter
-              </button>
-              <button
-                type="button"
+                RTK
+              </Button>
+              <Button
+                variant={sandboxMode === "caveman" ? "primary" : "secondary"}
+                size="sm"
                 onClick={() => setSandboxMode("caveman")}
-                className={`px-2.5 py-1 rounded-[5px] text-xs font-medium border ${sandboxMode === "caveman" ? "bg-primary text-white border-primary" : "border-border text-text-muted"}`}
               >
-                Caveman Terse
-              </button>
-              <button
-                type="button"
+                Caveman
+              </Button>
+              <Button
+                variant={sandboxMode === "ponytail" ? "primary" : "secondary"}
+                size="sm"
                 onClick={() => setSandboxMode("ponytail")}
-                className={`px-2.5 py-1 rounded-[5px] text-xs font-medium border ${sandboxMode === "ponytail" ? "bg-primary text-white border-primary" : "border-border text-text-muted"}`}
               >
-                Ponytail Code
-              </button>
+                Ponytail
+              </Button>
             </div>
 
-            <button
-              type="button"
-              onClick={runSandboxTest}
+            <Button
+              variant="primary"
+              size="sm"
+              icon="play_arrow"
+              loading={sandboxLoading}
               disabled={sandboxLoading || !sandboxInput.trim()}
-              className="px-4 py-1.5 rounded-[5px] text-xs font-semibold bg-primary text-white hover:opacity-90 active:scale-[0.98] disabled:opacity-50 transition-all flex items-center gap-1.5 shadow-xs"
+              onClick={runSandboxTest}
             >
-              <span className="material-symbols-outlined text-sm">play_arrow</span>
-              {sandboxLoading ? "Memproses…" : "Jalankan Kompresi"}
-            </button>
+              {sandboxLoading ? "Compressing..." : "Compress"}
+            </Button>
           </div>
 
           <textarea
             value={sandboxInput}
             onChange={(e) => setSandboxInput(e.target.value)}
             rows={5}
-            className="w-full font-mono text-xs p-3 rounded-lg border border-border bg-surface-1 text-text focus:outline-hidden focus:border-primary resize-y"
-            placeholder="Ketik atau paste output eksekusi tool di sini..."
+            placeholder="Output..."
+            className="w-full font-mono text-xs p-3 rounded-[10px] border border-border-subtle bg-surface-2 text-text-main placeholder-text-muted focus:outline-none focus:border-brand-500/50 resize-y custom-scrollbar"
           />
         </div>
 
         {/* Results View */}
         {sandboxResult && (
-          <div className="p-4 rounded-lg border border-success/30 bg-success/5 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-success/20 pb-2">
+          <div className="p-3.5 rounded-[12px] border border-green-500/30 bg-green-500/5 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-green-500/20 pb-2">
               <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-success text-base">check_circle</span>
-                <span className="text-xs font-semibold text-success uppercase tracking-wider">Hasil Optimasi</span>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-1 border border-border text-text-muted">
-                  Filter: {sandboxResult.detectedFilter}
+                <span className="material-symbols-outlined text-green-500 text-base">
+                  check_circle
+                </span>
+                <span className="text-xs font-semibold text-green-500 uppercase">
+                  Results
+                </span>
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-2 border border-border-subtle text-text-muted">
+                  {sandboxResult.detectedFilter}
                 </span>
               </div>
               <div className="flex items-center gap-3 text-xs">
-                <span>Sebelum: <strong className="font-mono text-text">{sandboxResult.originalChars}</strong> chars (~{sandboxResult.originalTokens} tok)</span>
-                <span>Sesudah: <strong className="font-mono text-success">{sandboxResult.compressedChars}</strong> chars (~{sandboxResult.compressedTokens} tok)</span>
-                <span className="px-2 py-0.5 rounded-[5px] font-bold bg-success text-white text-[11px]">
-                  -{sandboxResult.reductionPercent}%
+                <span>
+                  Original:{" "}
+                  <strong className="font-mono text-text-main">
+                    ~{sandboxResult.originalTokens} tok
+                  </strong>
                 </span>
+                <span>
+                  Compressed:{" "}
+                  <strong className="font-mono text-green-500">
+                    ~{sandboxResult.compressedTokens} tok
+                  </strong>
+                </span>
+                <Badge variant="success" size="sm">
+                  -{sandboxResult.reductionPercent}%
+                </Badge>
               </div>
             </div>
 
-            <div>
-              <p className="text-[11px] font-medium text-text-muted mb-1">Payload Terkompresi yang Dikirim ke LLM:</p>
-              <pre className="font-mono text-[11px] leading-relaxed p-3 rounded-lg bg-surface-1 border border-border overflow-x-auto text-text max-h-48 overflow-y-auto whitespace-pre-wrap">
-                {sandboxResult.compressedText}
-              </pre>
-            </div>
+            <pre className="font-mono text-[11px] leading-relaxed p-3 rounded-[8px] bg-bg border border-border-subtle text-text-main max-h-48 overflow-y-auto whitespace-pre-wrap custom-scrollbar">
+              {sandboxResult.compressedText}
+            </pre>
           </div>
         )}
       </Card>
 
-      {/* AI Agent & Tool Execution Architecture Guide */}
-      <Card className="space-y-4">
-        <div className="flex items-center gap-2 border-b border-border pb-3">
-          <span className="material-symbols-outlined text-accent text-xl">smart_toy</span>
-          <h2 className="text-base font-bold">
-            Dukungan Eksekusi Tool untuk AI Agent (Hermes, Claude Code, OpenCode)
+      {/* 5. Agent Integrations */}
+      <Card padding="sm" className="space-y-4">
+        <div className="flex items-center gap-2 border-b border-border-subtle pb-2.5">
+          <span className="material-symbols-outlined text-brand-500 text-[20px]">
+            smart_toy
+          </span>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+            Integrations
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-3.5 rounded-lg border border-border bg-surface-2/40 space-y-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* Hermes Agent */}
+          <div className="p-3 rounded-[10px] border border-border-subtle bg-surface-2 space-y-2">
             <div className="flex items-center justify-between">
-              <p className="font-semibold text-sm flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-purple-400 text-base">psychology</span>
-                Hermes Agent (Nous Research)
-              </p>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-success/15 text-success">Native Ready</span>
+              <span className="font-semibold text-xs text-text-main">Hermes Agent</span>
+              <Badge variant="success" size="sm">
+                Ready
+              </Badge>
             </div>
-            <p className="text-xs text-text-muted leading-relaxed">
-              Hermes Agent memanggil tools via format standar OpenAI (<code className="text-[10px] bg-surface-1 px-1 rounded">tools</code> & <code className="text-[10px] bg-surface-1 px-1 rounded">tool_calls</code>). Begitu Hermes mengeksekusi bash atau web fetch, hasil <code className="text-[10px] bg-surface-1 px-1 rounded">role: tool</code> otomatis dikompresi oleh RTK sebelum re-evaluasi LLM berikutnya.
-            </p>
-            <div className="pt-1 flex items-center justify-between text-[11px] font-mono bg-surface-1 p-2 rounded border border-border">
-              <span className="text-text-muted">Base URL: http://127.0.0.1:20128/v1</span>
-              <button
-                type="button"
+            <div className="flex items-center justify-between text-[11px] font-mono bg-bg p-2 rounded-[6px] border border-border-subtle">
+              <span className="truncate text-text-muted">http://127.0.0.1:20128/v1</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={copied ? "check" : "content_copy"}
                 onClick={() => copy("http://127.0.0.1:20128/v1")}
-                className="text-primary hover:underline"
               >
                 {copied ? "Copied" : "Copy"}
-              </button>
+              </Button>
             </div>
           </div>
 
-          <div className="p-3.5 rounded-lg border border-border bg-surface-2/40 space-y-2">
+          {/* Claude Code CLI */}
+          <div className="p-3 rounded-[10px] border border-border-subtle bg-surface-2 space-y-2">
             <div className="flex items-center justify-between">
-              <p className="font-semibold text-sm flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-amber-500 text-base">terminal</span>
-                Claude Code CLI (Anthropic)
-              </p>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-success/15 text-success">Full Bridge</span>
+              <span className="font-semibold text-xs text-text-main">Claude Code CLI</span>
+              <Badge variant="success" size="sm">
+                Ready
+              </Badge>
             </div>
-            <p className="text-xs text-text-muted leading-relaxed">
-              Claude Code CLI berkomunikasi melalui Anthropic Messages API (<code className="text-[10px] bg-surface-1 px-1 rounded">/v1/messages</code>). 9Router menerjemahkan Anthropic <code className="text-[10px] bg-surface-1 px-1 rounded">tool_use</code> dan <code className="text-[10px] bg-surface-1 px-1 rounded">tool_result</code> secara transparan sehingga Claude Code dapat menggunakan model provider manapun.
-            </p>
-            <div className="pt-1 flex items-center justify-between text-[11px] font-mono bg-surface-1 p-2 rounded border border-border">
-              <span className="text-text-muted">ANTHROPIC_BASE_URL=http://127.0.0.1:20128</span>
-              <button
-                type="button"
-                onClick={() => copy("export ANTHROPIC_BASE_URL=\"http://127.0.0.1:20128\"")}
-                className="text-primary hover:underline"
+            <div className="flex items-center justify-between text-[11px] font-mono bg-bg p-2 rounded-[6px] border border-border-subtle">
+              <span className="truncate text-text-muted">ANTHROPIC_BASE_URL</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={copied ? "check" : "content_copy"}
+                onClick={() => copy('export ANTHROPIC_BASE_URL="http://127.0.0.1:20128"')}
               >
                 {copied ? "Copied" : "Copy"}
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
 
-        <div className="p-3.5 rounded-lg border border-border bg-surface-2/40 space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="font-semibold text-sm flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-blue-400 text-base">hub</span>
-              Model Context Protocol (MCP) Bridge
-            </p>
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/15 text-primary">/api/mcp/:plugin/sse</span>
+          {/* MCP SSE Bridge */}
+          <div className="p-3 rounded-[10px] border border-border-subtle bg-surface-2 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-xs text-text-main">MCP Bridge</span>
+              <Badge variant="primary" size="sm">
+                SSE
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between text-[11px] font-mono bg-bg p-2 rounded-[6px] border border-border-subtle">
+              <span className="truncate text-text-muted">/api/mcp/:plugin/sse</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={copied ? "check" : "content_copy"}
+                onClick={() => copy("/api/mcp/:plugin/sse")}
+              >
+                {copied ? "Copied" : "Copy"}
+              </Button>
+            </div>
           </div>
-          <p className="text-xs text-text-muted leading-relaxed">
-            9Router menyediakan jembatan stdio-ke-SSE langsung untuk MCP tools (Filesystem, Brave Search, GitHub, Puppeteer, Memory). Agent dapat menghubungkan plugin lokal secara plug-and-play tanpa instalasi server terpisah.
-          </p>
         </div>
       </Card>
 
-      {/* Headroom Install & Setup Modal */}
+      {/* 6. Headroom Setup Modal */}
       <Modal
         isOpen={showHeadroomInstallModal}
-        title={headroomRunning ? "Kelola Headroom" : "Setup Headroom Proxy"}
+        title={headroomRunning ? "Headroom" : "Headroom Setup"}
         onClose={() => setShowHeadroomInstallModal(false)}
       >
         <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between text-sm">
-            <span>Status</span>
-            <span className={headroomRunning ? "text-success font-semibold" : "text-warning font-semibold"}>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-text-muted">Status</span>
+            <Badge variant={headroomRunning ? "success" : "warning"} size="sm">
               {headroomStatusLabel}
-            </span>
+            </Badge>
           </div>
+
           {headroomRunning && (
             <a
               href="/api/headroom/proxy/dashboard"
               target="_blank"
               rel="noreferrer"
-              className="w-full rounded-[5px] border border-border px-4 py-2 text-center text-sm hover:bg-surface-2 font-medium"
+              className="w-full rounded-[10px] border border-border-subtle px-4 py-2 text-center text-xs hover:bg-surface-2 font-medium text-text-main"
             >
-              Buka Headroom Dashboard
+              Dashboard
             </a>
           )}
-          <div className="flex flex-col gap-1">
-            <p className="text-sm font-medium">Proxy URL</p>
+
+          <div>
+            <label className="block text-xs font-medium text-text-muted mb-1">
+              Proxy URL
+            </label>
             <Input
               value={headroomUrl}
               onChange={(e) => setHeadroomUrl(e.target.value)}
               onBlur={handleHeadroomUrlBlur}
-              placeholder="http://localhost:8787"
-              className="font-mono text-sm"
+              placeholder="URL..."
+              className="font-mono text-xs"
             />
-            <p className="text-xs text-text-muted">
-              Gunakan proxy lokal untuk Start/Stop otomatis, atau sidecar Docker eksternal seperti http://headroom:8787.
-            </p>
           </div>
-          <div className="flex flex-col gap-1">
-            <p className="text-sm font-medium">Timeout (ms)</p>
+
+          <div>
+            <label className="block text-xs font-medium text-text-muted mb-1">
+              Timeout (ms)
+            </label>
             <Input
               value={String(headroomTimeoutMs)}
               onChange={(e) => setHeadroomTimeoutMs(e.target.value)}
               onBlur={handleHeadroomTimeoutBlur}
-              placeholder="3000"
-              className="font-mono text-sm"
+              placeholder="Timeout..."
+              className="font-mono text-xs"
             />
-            <p className="text-xs text-text-muted">
-              Batas waktu request dalam milidetik. Standar 3000 ms.
-            </p>
           </div>
+
           {headroomManaged ? (
             <Button
               onClick={handleHeadroomStop}
-              variant="ghost"
+              variant="danger"
               fullWidth
               disabled={headroomActionLoading}
             >
-              {headroomActionLoading ? "Menghentikan…" : "Hentikan Headroom"}
+              {headroomActionLoading ? "Stopping..." : "Stop"}
             </Button>
-          ) : headroomRunning ? (
-            <p className="text-sm text-success">
-              Proxy Headroom aktif dan dapat dijangkau. Token saver siap digunakan.
-            </p>
           ) : headroomCanStart ? (
             <Button
               onClick={handleHeadroomStart}
+              variant="primary"
               fullWidth
               disabled={headroomActionLoading}
             >
-              {headroomActionLoading ? "Menjalankan…" : "Jalankan Headroom"}
+              {headroomActionLoading ? "Starting..." : "Start"}
             </Button>
-          ) : !headroomLocalUrl ? (
-            <p className="text-sm text-warning">
-              Jalankan Headroom secara terpisah pada URL di atas, lalu klik Periksa Ulang.
-            </p>
           ) : !headroomStatus.python ? (
-            <p className="text-sm text-warning">
-              Membutuhkan Python ≥ 3.10 untuk mode lokal. Pasang Python terlebih dahulu atau gunakan Docker.
+            <p className="text-xs text-amber-500">
+              Python ≥ 3.10 required for local mode.
             </p>
           ) : (
             <div className="flex flex-col gap-1">
-              <p className="text-sm font-medium">Pasang via Terminal:</p>
+              <span className="text-xs font-medium text-text-muted">Install:</span>
               <div className="flex items-center gap-2">
-                <pre className="flex-1 rounded-[5px] bg-black/10 dark:bg-white/5 p-2 text-xs font-mono overflow-x-auto">
+                <pre className="flex-1 rounded-[8px] bg-bg p-2 text-xs font-mono overflow-x-auto text-text-main">
                   {`pip install "headroom-ai[proxy]"`}
                 </pre>
                 <Button
                   size="sm"
-                  variant="ghost"
+                  variant="secondary"
+                  icon={copied ? "check" : "content_copy"}
                   onClick={() => copy(`pip install "headroom-ai[proxy]"`)}
                 >
-                  {copied ? "Tersalin" : "Salin"}
+                  {copied ? "Copied" : "Copy"}
                 </Button>
               </div>
             </div>
           )}
+
           {headroomActionError && (
-            <p className="text-sm text-error">{headroomActionError}</p>
+            <p className="text-xs text-red-500">{headroomActionError}</p>
           )}
-          <div className="flex gap-2 pt-2">
+
+          <div className="flex gap-2 pt-2 border-t border-border-subtle">
             <Button
               onClick={() => refreshHeadroomStatus()}
-              variant="ghost"
+              variant="secondary"
               fullWidth
             >
-              Periksa Ulang
+              Check
             </Button>
             <Button
               onClick={() => setShowHeadroomInstallModal(false)}
+              variant="primary"
               fullWidth
             >
-              Selesai
+              Close
             </Button>
           </div>
         </div>

@@ -9,7 +9,7 @@ import {
   getSkillBlobUrl,
 } from "@/shared/constants/skills";
 
-function CopyButton({ value, label = "Copy link" }) {
+function CopyButton({ value, label = "Copy" }) {
   const { copied, copy } = useCopyToClipboard(2000);
   return (
     <button
@@ -20,7 +20,7 @@ function CopyButton({ value, label = "Copy link" }) {
       <span className="material-symbols-outlined text-[14px]">
         {copied ? "check" : "content_copy"}
       </span>
-      {copied ? "Tersalin!" : label}
+      {copied ? "Copied!" : label}
     </button>
   );
 }
@@ -94,7 +94,7 @@ export default function SkillsPage() {
             </h1>
           </div>
           <p className="text-sm text-text-muted mt-1">
-            Drop-in skills resmi untuk AI Agent (Claude Code CLI, Cursor, Hermes Agent, OpenCode, ChatGPT).
+            Drop-in skills for AI agents (Claude Code, Cursor, Hermes, OpenCode).
           </p>
         </div>
 
@@ -115,7 +115,7 @@ export default function SkillsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="space-y-1">
             <div className="text-xs font-semibold text-primary uppercase tracking-wider">
-              Prompt Siap Tempel ke AI Agent Anda:
+              Quick Prompt
             </div>
             <div className="font-mono text-xs text-text break-all">
               Read this skill and use it: {entrySkillUrl}
@@ -128,7 +128,7 @@ export default function SkillsPage() {
             <span className="material-symbols-outlined text-sm">
               {copied ? "check" : "content_copy"}
             </span>
-            {copied ? "Tersalin!" : "Salin Prompt"}
+            {copied ? "Copied!" : "Copy Prompt"}
           </button>
         </div>
       </Card>
@@ -144,9 +144,9 @@ export default function SkillsPage() {
       <Card padding="md">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <h2 className="text-sm font-semibold text-text">Repository GitHub Resmi</h2>
+            <h2 className="text-sm font-semibold text-text">GitHub Repository</h2>
             <p className="text-xs text-text-muted mt-0.5">
-              Source code, dokumentasi markdown, dan seluruh agent skills tersimpan di <code className="text-[11px] font-mono text-primary">dresar/go-9router</code>.
+              Source code and agent skills on <code className="text-[11px] font-mono text-primary">dresar/go-9router</code>.
             </p>
           </div>
           <a
@@ -156,7 +156,7 @@ export default function SkillsPage() {
             className="px-3.5 py-1.5 rounded-[5px] text-xs font-semibold border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 active:scale-[0.98] transition-all inline-flex items-center gap-1.5"
           >
             <span className="material-symbols-outlined text-[15px]">open_in_new</span>
-            Buka Skills di GitHub (dresar/go-9router)
+            Open GitHub
           </a>
         </div>
       </Card>

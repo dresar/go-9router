@@ -10,9 +10,9 @@ export default function PlaygroundDropdown({
   value,
   onChange,
   options = [],
-  placeholder = "Pilih...",
+  placeholder = "Select...",
   searchable = true,
-  searchPlaceholder = "Cari...",
+  searchPlaceholder = "Search...",
   disabled = false,
   className = "",
   buttonClassName = "",
@@ -163,7 +163,7 @@ export default function PlaygroundDropdown({
           <div className="overflow-y-auto custom-scrollbar flex-1 py-1">
             {filteredOptions.length === 0 ? (
               <div className="px-3 py-3 text-center text-xs text-text-muted">
-                Tidak ada data
+                No data
               </div>
             ) : (
               filteredOptions.map((opt) => {

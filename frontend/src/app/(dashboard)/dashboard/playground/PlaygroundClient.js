@@ -38,23 +38,23 @@ const PROVIDER_NAMES = {
 // Provider Presets for Chat Models (when database catalog is sparse)
 const DEFAULT_PROVIDER_MODELS = {
   gemini: [
-    { id: "gemini/gemini-2.5-flash", name: "Gemini 2.5 Flash", subtitle: "Cepat & Multimodal" },
-    { id: "gemini/gemini-2.5-pro", name: "Gemini 2.5 Pro", subtitle: "Reasoning kuat" },
-    { id: "gemini/gemini-1.5-flash", name: "Gemini 1.5 Flash", subtitle: "Efisiensi tinggi" },
+    { id: "gemini/gemini-2.5-flash", name: "Gemini 2.5 Flash", subtitle: "Fast & Multimodal" },
+    { id: "gemini/gemini-2.5-pro", name: "Gemini 2.5 Pro", subtitle: "Strong reasoning" },
+    { id: "gemini/gemini-1.5-flash", name: "Gemini 1.5 Flash", subtitle: "High efficiency" },
   ],
   openai: [
     { id: "openai/gpt-4o", name: "GPT-4o", subtitle: "Flagship multimodal" },
-    { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", subtitle: "Cepat & hemat" },
-    { id: "openai/chatgpt-4o-latest", name: "ChatGPT 4o Latest", subtitle: "Model percakapan terbaru" },
-    { id: "openai/o1-mini", name: "o1 Mini", subtitle: "Penalaran matematika & kode" },
+    { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", subtitle: "Fast & lightweight" },
+    { id: "openai/chatgpt-4o-latest", name: "ChatGPT 4o Latest", subtitle: "Latest dynamic chat" },
+    { id: "openai/o1-mini", name: "o1 Mini", subtitle: "Math & code reasoning" },
   ],
   claude: [
-    { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", subtitle: "Coding & analisis terbaik" },
-    { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", subtitle: "Super cepat" },
+    { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", subtitle: "Leading code & analysis" },
+    { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", subtitle: "Ultra fast" },
   ],
   deepseek: [
     { id: "deepseek/default", name: "DeepSeek Chat", subtitle: "General chat V3" },
-    { id: "deepseek-reasoner", name: "DeepSeek R1", subtitle: "Deep thinking / reasoning" },
+    { id: "deepseek-reasoner", name: "DeepSeek R1", subtitle: "Deep thinking & reasoning" },
   ],
   groq: [
     { id: "groq/default", name: "Llama 3.3 70B", subtitle: "Ultra low-latency" },
@@ -85,15 +85,15 @@ const IMAGE_PROVIDERS = [
 
 const IMAGE_MODELS_BY_PROVIDER = {
   openai: [
-    { id: "openai/dall-e-3", name: "DALL-E 3", subtitle: "Kualitas tertinggi & detail" },
-    { id: "openai/dall-e-2", name: "DALL-E 2", subtitle: "Generasi cepat" },
+    { id: "openai/dall-e-3", name: "DALL-E 3", subtitle: "High quality & details" },
+    { id: "openai/dall-e-2", name: "DALL-E 2", subtitle: "Fast generation" },
   ],
   openrouter: [
-    { id: "openrouter/black-forest-labs/flux-1-schnell", name: "FLUX 1 Schnell", subtitle: "Cepat 4-step" },
-    { id: "openrouter/black-forest-labs/flux-1-dev", name: "FLUX 1 Dev", subtitle: "Kualitas studio" },
+    { id: "openrouter/black-forest-labs/flux-1-schnell", name: "FLUX 1 Schnell", subtitle: "Fast 4-step" },
+    { id: "openrouter/black-forest-labs/flux-1-dev", name: "FLUX 1 Dev", subtitle: "Studio quality" },
   ],
   xai: [
-    { id: "grok-imagine", name: "Grok Imagine", subtitle: "Generasi visual Grok" },
+    { id: "grok-imagine", name: "Grok Imagine", subtitle: "Visual generation" },
   ],
 };
 
@@ -654,7 +654,7 @@ export default function PlaygroundClient() {
             </Badge>
           </div>
           <p className="text-xs text-text-muted mt-1">
-            Uji model, fallback combo, dan generate gambar secara lokal.
+            Test models, fallback combos, and generate images locally.
           </p>
         </div>
 
@@ -662,7 +662,7 @@ export default function PlaygroundClient() {
         <SegmentedControl
           options={[
             { value: "chat", label: "Chat & Vision", icon: "forum" },
-            { value: "image", label: "Gambar", icon: "palette" },
+            { value: "image", label: "Image", icon: "palette" },
           ]}
           value={activeTab}
           onChange={setActiveTab}
@@ -681,7 +681,7 @@ export default function PlaygroundClient() {
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-text-muted">API Key</span>
                 <span className="text-[10px] bg-brand-500/10 text-brand-500 border border-brand-500/20 px-1.5 py-0.5 rounded font-mono">
-                  Otomatis
+                  Automatic
                 </span>
               </div>
               <div className="font-mono text-xs text-text-main mt-0.5 flex items-center gap-2 truncate">
@@ -691,7 +691,7 @@ export default function PlaygroundClient() {
                     type="button"
                     onClick={() => setShowKeySecret(!showKeySecret)}
                     className="text-text-muted hover:text-text-main transition-colors cursor-pointer"
-                    title={showKeySecret ? "Sembunyikan" : "Tampilkan"}
+                    title={showKeySecret ? "Hide" : "Show"}
                   >
                     <span className="material-symbols-outlined text-[16px] align-middle">
                       {showKeySecret ? "visibility_off" : "visibility"}
@@ -724,7 +724,7 @@ export default function PlaygroundClient() {
                 icon={copied ? "check" : "content_copy"}
                 onClick={() => copy(selectedKey)}
               >
-                {copied ? "Tersalin!" : "Salin"}
+                {copied ? "Copied!" : "Copy"}
               </Button>
             )}
           </div>
@@ -750,7 +750,7 @@ export default function PlaygroundClient() {
                 </div>
                 {chatProvider === "combo" && (
                   <Badge variant="primary" size="sm" icon="bolt">
-                    Mode Combo
+                    Combo Mode
                   </Badge>
                 )}
               </div>
@@ -763,19 +763,19 @@ export default function PlaygroundClient() {
                   value={chatProvider}
                   onChange={handleChatProviderChange}
                   options={chatProviderOptions}
-                  placeholder="Pilih Provider"
+                  placeholder="Select Provider"
                 />
 
                 {/* Dropdown 2: Model (Synchronized) */}
                 <PlaygroundDropdown
-                  label={chatProvider === "combo" ? "Pilih Combo Router" : "Model"}
+                  label={chatProvider === "combo" ? "Combo Router" : "Model"}
                   value={chatModel}
                   onChange={(val) => {
                     setChatModel(val);
                     if (val !== "custom") setChatCustomModel("");
                   }}
                   options={chatModelOptions}
-                  placeholder={chatProvider === "combo" ? "Pilih Combo..." : "Pilih Model..."}
+                  placeholder={chatProvider === "combo" ? "Select Combo..." : "Select Model..."}
                 />
 
                 {/* Custom Model Input when 'custom' selected */}
@@ -783,7 +783,7 @@ export default function PlaygroundClient() {
                   <div className="pt-1">
                     <input
                       type="text"
-                      placeholder="Model ID (contoh: gemini-2.5-flash)"
+                      placeholder="Model"
                       value={chatCustomModel}
                       onChange={(e) => setChatCustomModel(e.target.value)}
                       className="w-full bg-surface-2 border border-border-subtle rounded-[10px] px-3 py-2 text-xs text-text-main placeholder-text-muted focus:outline-none focus:border-brand-500/50"
@@ -795,13 +795,13 @@ export default function PlaygroundClient() {
               {/* System Instruction */}
               <div>
                 <label className="block text-xs font-medium text-text-muted mb-1.5">
-                  Instruksi
+                  Instruction
                 </label>
                 <input
                   type="text"
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
-                  placeholder="Instruksi"
+                  placeholder="Instruction..."
                   className="w-full bg-surface-2 border border-border-subtle rounded-[10px] px-3 py-2 text-xs text-text-main placeholder-text-muted focus:outline-none focus:border-brand-500/50"
                 />
               </div>
@@ -810,7 +810,7 @@ export default function PlaygroundClient() {
               <div className="grid grid-cols-2 gap-3 items-center">
                 <div>
                   <div className="flex justify-between text-xs text-text-muted mb-1.5">
-                    <span>Suhu</span>
+                    <span>Temperature</span>
                     <span className="font-mono text-brand-500">{chatTemperature}</span>
                   </div>
                   <input
@@ -824,7 +824,7 @@ export default function PlaygroundClient() {
                   />
                 </div>
                 <div className="flex items-center justify-between p-2.5 bg-surface-2 rounded-[10px] border border-border-subtle">
-                  <span className="text-xs text-text-main font-medium">Streaming</span>
+                  <span className="text-xs text-text-main font-medium">Stream</span>
                   <input
                     type="checkbox"
                     checked={chatStream}
@@ -849,7 +849,7 @@ export default function PlaygroundClient() {
                       onClick={clearChatImage}
                       className="text-[11px] text-red-400 hover:text-red-300 transition-colors cursor-pointer"
                     >
-                      Hapus
+                      Remove
                     </button>
                   )}
                 </div>
@@ -870,7 +870,7 @@ export default function PlaygroundClient() {
                       cloud_upload
                     </span>
                     <p className="text-xs text-text-muted mt-0.5">
-                      Unggah gambar
+                      Upload image
                     </p>
                   </div>
                 ) : (
@@ -892,7 +892,7 @@ export default function PlaygroundClient() {
               {chatImageDataUrl && (
                 <div>
                   <span className="text-[11px] font-medium text-text-muted block mb-1.5">
-                    Contoh Pertanyaan:
+                    Sample Prompts:
                   </span>
                   <div className="flex flex-col gap-1">
                     {VISION_SAMPLE_PROMPTS.map((p, idx) => (
@@ -912,7 +912,7 @@ export default function PlaygroundClient() {
               {/* Chat Prompt Input */}
               <div>
                 <label className="block text-xs font-medium text-text-muted mb-1.5">
-                  Pesan
+                  Message
                 </label>
                 <textarea
                   rows={3}
@@ -923,7 +923,7 @@ export default function PlaygroundClient() {
                       handleSendChat();
                     }
                   }}
-                  placeholder="Pesan..."
+                  placeholder="Message..."
                   className="w-full bg-surface-2 border border-border-subtle rounded-[10px] p-2.5 text-xs text-text-main placeholder-text-muted focus:outline-none focus:border-brand-500/50 leading-relaxed custom-scrollbar"
                 />
               </div>
@@ -937,7 +937,7 @@ export default function PlaygroundClient() {
                 disabled={chatSending || (!chatPrompt.trim() && !chatImageDataUrl)}
                 onClick={handleSendChat}
               >
-                {chatSending ? "Mengirim..." : "Kirim"}
+                {chatSending ? "Sending..." : "Send"}
               </Button>
             </Card>
           </div>
@@ -952,7 +952,7 @@ export default function PlaygroundClient() {
                       smart_toy
                     </span>
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-                      Respon
+                      Response
                     </h3>
                   </div>
 
@@ -979,7 +979,7 @@ export default function PlaygroundClient() {
                       error
                     </span>
                     <div className="min-w-0">
-                      <span className="font-semibold block">Gagal</span>
+                      <span className="font-semibold block">Failed</span>
                       <span className="font-mono text-[11px] break-all">{chatError}</span>
                     </div>
                   </div>
@@ -995,14 +995,14 @@ export default function PlaygroundClient() {
                     <span className="material-symbols-outlined text-3xl text-brand-500 animate-spin mb-3">
                       progress_activity
                     </span>
-                    <p className="text-xs text-text-muted">Mengalirkan data...</p>
+                    <p className="text-xs text-text-muted">Streaming data...</p>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-24 text-center text-text-muted">
                     <span className="material-symbols-outlined text-3xl text-text-muted mb-2">
                       chat_bubble_outline
                     </span>
-                    <h4 className="text-xs font-medium text-text-muted">Belum ada respon</h4>
+                    <h4 className="text-xs font-medium text-text-muted">No response yet</h4>
                   </div>
                 )}
               </div>
@@ -1015,7 +1015,7 @@ export default function PlaygroundClient() {
                   icon="terminal"
                   onClick={() => setChatRawInspector(!chatRawInspector)}
                 >
-                  {chatRawInspector ? "Tutup JSON" : "JSON"}
+                  {chatRawInspector ? "Close JSON" : "JSON"}
                 </Button>
 
                 {chatResponse && (
@@ -1025,7 +1025,7 @@ export default function PlaygroundClient() {
                     icon={copied ? "check" : "content_copy"}
                     onClick={() => copy(chatResponse)}
                   >
-                    {copied ? "Tersalin!" : "Salin"}
+                    {copied ? "Copied!" : "Copy"}
                   </Button>
                 )}
               </div>
@@ -1057,7 +1057,7 @@ export default function PlaygroundClient() {
                   brush
                 </span>
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-                  Parameter Gambar
+                  Image Parameters
                 </h2>
               </div>
 
@@ -1068,25 +1068,25 @@ export default function PlaygroundClient() {
                   value={imageProvider}
                   onChange={handleImageProviderChange}
                   options={IMAGE_PROVIDERS}
-                  placeholder="Pilih Provider"
+                  placeholder="Select Provider"
                 />
 
                 <PlaygroundDropdown
-                  label="Model Gambar"
+                  label="Image Model"
                   value={imageModel}
                   onChange={(val) => {
                     setImageModel(val);
                     if (val !== "custom") setImageCustomModel("");
                   }}
                   options={imageModelOptions}
-                  placeholder="Pilih Model"
+                  placeholder="Select Model"
                 />
 
                 {imageModel === "custom" && (
                   <div className="pt-1">
                     <input
                       type="text"
-                      placeholder="Model ID (contoh: openai/dall-e-3)"
+                      placeholder="Model"
                       value={imageCustomModel}
                       onChange={(e) => setImageCustomModel(e.target.value)}
                       className="w-full bg-surface-2 border border-border-subtle rounded-[10px] px-3 py-2 text-xs text-text-main placeholder-text-muted focus:outline-none focus:border-brand-500/50"
@@ -1099,7 +1099,7 @@ export default function PlaygroundClient() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-text-muted mb-1.5">
-                    Resolusi
+                    Resolution
                   </label>
                   <select
                     value={imageSize}
@@ -1114,7 +1114,7 @@ export default function PlaygroundClient() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-text-muted mb-1.5">
-                    Kualitas
+                    Quality
                   </label>
                   <select
                     value={imageQuality}
@@ -1130,7 +1130,7 @@ export default function PlaygroundClient() {
               {/* Style Selection */}
               <div>
                 <label className="block text-xs font-medium text-text-muted mb-1.5">
-                  Gaya
+                  Style
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -1165,14 +1165,14 @@ export default function PlaygroundClient() {
                     Prompt
                   </label>
                   <span className="text-[10px] text-text-muted font-mono">
-                    {imagePrompt.length} karakter
+                    {imagePrompt.length} chars
                   </span>
                 </div>
                 <textarea
                   rows={4}
                   value={imagePrompt}
                   onChange={(e) => setImagePrompt(e.target.value)}
-                  placeholder="Prompt deskripsi gambar..."
+                  placeholder="Prompt..."
                   className="w-full bg-surface-2 border border-border-subtle rounded-[10px] p-3 text-xs text-text-main placeholder-text-muted focus:outline-none focus:border-brand-500/50 leading-relaxed custom-scrollbar"
                 />
               </div>
@@ -1180,7 +1180,7 @@ export default function PlaygroundClient() {
               {/* Sample Prompts */}
               <div>
                 <span className="text-[11px] font-medium text-text-muted block mb-1.5">
-                  Contoh Prompt:
+                  Sample Prompts:
                 </span>
                 <div className="flex flex-col gap-1.5">
                   {IMAGE_SAMPLE_PROMPTS.map((p, idx) => (
@@ -1205,7 +1205,7 @@ export default function PlaygroundClient() {
                 disabled={imageGenerating || !imagePrompt.trim()}
                 onClick={handleGenerateImage}
               >
-                {imageGenerating ? `Memproses (${imageTimer}s)...` : "Generate"}
+                {imageGenerating ? `Processing (${imageTimer}s)...` : "Generate"}
               </Button>
             </Card>
           </div>
@@ -1220,7 +1220,7 @@ export default function PlaygroundClient() {
                       image
                     </span>
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-                      Hasil Gambar
+                      Generated Image
                     </h3>
                   </div>
 
@@ -1238,7 +1238,7 @@ export default function PlaygroundClient() {
                       error
                     </span>
                     <div className="min-w-0">
-                      <span className="font-semibold block">Gagal</span>
+                      <span className="font-semibold block">Failed</span>
                       <span className="font-mono text-[11px] break-all">{imageError}</span>
                     </div>
                   </div>
@@ -1251,9 +1251,9 @@ export default function PlaygroundClient() {
                       palette
                     </span>
                     <h4 className="text-xs font-semibold text-text-main">
-                      Sedang memproses...
+                      Processing...
                     </h4>
-                    <p className="text-xs text-text-muted mt-1 font-mono">{imageTimer} detik</p>
+                    <p className="text-xs text-text-muted mt-1 font-mono">{imageTimer}s</p>
                   </div>
                 )}
 
@@ -1279,7 +1279,7 @@ export default function PlaygroundClient() {
 
                     <div className="bg-bg p-3 rounded-[10px] border border-border-subtle text-xs space-y-1">
                       <span className="text-[10px] font-semibold text-text-muted uppercase">
-                        Prompt Revisi:
+                        Revised Prompt:
                       </span>
                       <p className="text-text-main italic leading-relaxed">
                         {imageCurrentResult.revisedPrompt}
@@ -1294,7 +1294,7 @@ export default function PlaygroundClient() {
                     <span className="material-symbols-outlined text-3xl text-text-muted mb-2">
                       add_photo_alternate
                     </span>
-                    <h4 className="text-xs font-medium text-text-muted">Belum ada hasil</h4>
+                    <h4 className="text-xs font-medium text-text-muted">No results yet</h4>
                   </div>
                 )}
               </div>
@@ -1307,7 +1307,7 @@ export default function PlaygroundClient() {
                   icon="code"
                   onClick={() => setImageRawInspector(!imageRawInspector)}
                 >
-                  {imageRawInspector ? "Tutup JSON" : "JSON"}
+                  {imageRawInspector ? "Close JSON" : "JSON"}
                 </Button>
               </div>
 
@@ -1323,7 +1323,7 @@ export default function PlaygroundClient() {
                   <div className="bg-bg p-2.5 rounded-[10px] border border-border-subtle overflow-x-auto">
                     <span className="text-green-500 font-semibold block mb-1">Response:</span>
                     <pre className="text-text-muted">
-                      {imageLastRawResponse ? JSON.stringify(imageLastRawResponse, null, 2) : "Kosong"}
+                      {imageLastRawResponse ? JSON.stringify(imageLastRawResponse, null, 2) : "Empty"}
                     </pre>
                   </div>
                 </div>
@@ -1335,7 +1335,7 @@ export default function PlaygroundClient() {
               <Card padding="sm">
                 <h4 className="text-xs font-semibold text-text-muted mb-2.5 flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-sm">photo_library</span>
-                  Riwayat ({imageGallery.length})
+                  History ({imageGallery.length})
                 </h4>
                 <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
                   {imageGallery.map((item) => (
