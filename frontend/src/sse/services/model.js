@@ -7,6 +7,10 @@ import REGISTRY from "open-sse/providers/registry/index.js";
 const LOCAL_PROVIDER_ALIASES = {
   xmtp: "xiaomi-tokenplan",
   "xiaomi-tokenplan": "xiaomi-tokenplan",
+  "@cf": "cloudflare-ai",
+  cf: "cloudflare-ai",
+  cloudflare: "cloudflare-ai",
+  "cloudflare-ai": "cloudflare-ai",
 };
 
 const RESERVED_PROVIDER_PREFIXES = new Set(Object.keys(LOCAL_PROVIDER_ALIASES));
@@ -17,9 +21,22 @@ for (const entry of REGISTRY) {
 }
 
 export function parseModel(modelStr) {
+  if (typeof modelStr === "string" && modelStr.startsWith("@cf/")) {
+    return {
+      provider: "cloudflare-ai",
+      model: modelStr,
+      isAlias: false,
+      providerAlias: "@cf",
+    };
+  }
   const parsed = parseModelCore(modelStr);
   if (parsed?.providerAlias && LOCAL_PROVIDER_ALIASES[parsed.providerAlias]) {
-    return { ...parsed, provider: LOCAL_PROVIDER_ALIASES[parsed.providerAlias] };
+    const prov = LOCAL_PROVIDER_ALIASES[parsed.providerAlias];
+    let model = parsed.model;
+    if (prov === "cloudflare-ai" && !model.startsWith("@cf/") && !model.includes("/")) {
+      model = `@cf/${model}`;
+    }
+    return { ...parsed, provider: prov, model };
   }
   return parsed;
 }

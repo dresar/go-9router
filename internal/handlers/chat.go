@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -132,6 +134,10 @@ func (h *Handler) handleSingleChat(w http.ResponseWriter, r *http.Request, body 
 	for {
 		providerID, modelID, ok := providers.ResolveModelProvider(modelStr, h.DB)
 		if !ok {
+			if isPortOpen("127.0.0.1", 20127) || h.ensureNodeRunning() {
+				h.proxyChatToNode(w, r, body, modelStr)
+				return
+			}
 			h.JSONError(w, http.StatusBadRequest, fmt.Sprintf("cannot resolve provider for model: %s", modelStr))
 			return
 		}
@@ -142,12 +148,20 @@ func (h *Handler) handleSingleChat(w http.ResponseWriter, r *http.Request, body 
 			return
 		}
 		if sel == nil {
+			if isPortOpen("127.0.0.1", 20127) || h.ensureNodeRunning() {
+				h.proxyChatToNode(w, r, body, modelStr)
+				return
+			}
 			h.JSONError(w, http.StatusServiceUnavailable, fmt.Sprintf("no active credentials for provider: %s", providerID))
 			return
 		}
 		if sel.AllLocked {
 			if lastError == "" {
 				lastError = "all accounts temporarily unavailable"
+			}
+			if isPortOpen("127.0.0.1", 20127) || h.ensureNodeRunning() {
+				h.proxyChatToNode(w, r, body, modelStr)
+				return
 			}
 			latencyMs := time.Since(startTime).Milliseconds()
 			go h.recordObservability(providerID, modelStr, "", "unavailable", latencyMs, body)
@@ -161,6 +175,10 @@ func (h *Handler) handleSingleChat(w http.ResponseWriter, r *http.Request, body 
 		adapter, known := adapters.GetAdapterWithCreds(providerID, sel.Credentials)
 		if !known {
 			providers.RecordConnectionEnd(sel.Credentials.ConnectionID)
+			if isPortOpen("127.0.0.1", 20127) || h.ensureNodeRunning() {
+				h.proxyChatToNode(w, r, body, modelStr)
+				return
+			}
 			h.JSONError(w, http.StatusNotImplemented,
 				fmt.Sprintf("provider '%s' not yet implemented. Use Node.js backend for this provider.", providerID),
 			)
@@ -237,6 +255,15 @@ func (h *Handler) handleSingleChat(w http.ResponseWriter, r *http.Request, body 
 func (h *Handler) trySingleChatWithFallback(r *http.Request, body map[string]any, modelStr string) (*providers.UpstreamResult, string) {
 	providerID, modelID, ok := providers.ResolveModelProvider(modelStr, h.DB)
 	if !ok {
+		if isPortOpen("127.0.0.1", 20127) || h.ensureNodeRunning() {
+			res, errStr := h.callNodeChat(r.Context(), body)
+			if res != nil {
+				return res, ""
+			}
+			if errStr != "" {
+				return nil, errStr
+			}
+		}
 		return nil, fmt.Sprintf("cannot resolve provider for model: %s", modelStr)
 	}
 
@@ -246,6 +273,12 @@ func (h *Handler) trySingleChatWithFallback(r *http.Request, body map[string]any
 	for attempt := 0; attempt < 3; attempt++ {
 		sel, err := providers.SelectCredentials(h.DB, providerID, exclude)
 		if err != nil || sel == nil || sel.AllLocked {
+			if attempt == 0 && (isPortOpen("127.0.0.1", 20127) || h.ensureNodeRunning()) {
+				res, _ := h.callNodeChat(r.Context(), body)
+				if res != nil {
+					return res, ""
+				}
+			}
 			break
 		}
 
@@ -253,6 +286,15 @@ func (h *Handler) trySingleChatWithFallback(r *http.Request, body map[string]any
 		adapter, known := adapters.GetAdapterWithCreds(providerID, sel.Credentials)
 		if !known {
 			providers.RecordConnectionEnd(sel.Credentials.ConnectionID)
+			if isPortOpen("127.0.0.1", 20127) || h.ensureNodeRunning() {
+				res, errStr := h.callNodeChat(r.Context(), body)
+				if res != nil {
+					return res, ""
+				}
+				if errStr != "" {
+					return nil, errStr
+				}
+			}
 			break
 		}
 
@@ -390,4 +432,136 @@ func randomSuffix(n int) string {
 func cleanModelName(m string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(m, "/", "-"), ":", "-")
 }
+
+func (h *Handler) ensureNodeRunning() bool {
+	if isPortOpen("127.0.0.1", 20127) {
+		return true
+	}
+	EnsureNextServer()
+	return isPortOpen("127.0.0.1", 20127)
+}
+
+func (h *Handler) proxyChatToNode(w http.ResponseWriter, r *http.Request, body map[string]any, modelStr string) {
+	bodyCopy := copyMap(body)
+	if modelStr != "" {
+		bodyCopy["model"] = modelStr
+	}
+	bodyBytes, err := json.Marshal(bodyCopy)
+	if err != nil {
+		h.JSONError(w, http.StatusBadRequest, "failed to serialize chat body")
+		return
+	}
+
+	nodeURL := "http://127.0.0.1:20127/api/v1/chat/completions"
+	nodeReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, nodeURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		h.JSONError(w, http.StatusInternalServerError, "failed to create node request")
+		return
+	}
+
+	nodeReq.Header.Set("Content-Type", "application/json")
+	nodeReq.Header.Set("Accept", "text/event-stream, application/json")
+
+	// Forward client Authorization if present, or attach local internal API key
+	clientAuth := r.Header.Get("Authorization")
+	if clientAuth == "" {
+		clientAuth = r.Header.Get("x-api-key")
+	}
+	if clientAuth != "" {
+		if !strings.HasPrefix(strings.ToLower(clientAuth), "bearer ") && !strings.Contains(clientAuth, " ") {
+			nodeReq.Header.Set("Authorization", "Bearer "+clientAuth)
+		} else {
+			nodeReq.Header.Set("Authorization", clientAuth)
+		}
+	} else {
+		if keys, err := repos.ListAPIKeys(h.DB); err == nil {
+			for _, k := range keys {
+				if k.IsActive {
+					nodeReq.Header.Set("Authorization", "Bearer "+k.Key)
+					break
+				}
+			}
+		}
+	}
+
+	for _, hKey := range []string{"anthropic-version", "anthropic-beta", "x-9router-token-saver"} {
+		if v := r.Header.Get(hKey); v != "" {
+			nodeReq.Header.Set(hKey, v)
+		}
+	}
+
+	client := &http.Client{Timeout: 0}
+	resp, err := client.Do(nodeReq)
+	if err != nil {
+		h.JSONError(w, http.StatusBadGateway, fmt.Sprintf("Node.js backend error: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	for k, v := range resp.Header {
+		for _, val := range v {
+			w.Header().Add(k, val)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+
+	if stream.IsSSERequest(body) || strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream") {
+		flusher, ok := w.(http.Flusher)
+		buf := make([]byte, 4096)
+		for {
+			n, readErr := resp.Body.Read(buf)
+			if n > 0 {
+				w.Write(buf[:n])
+				if ok {
+					flusher.Flush()
+				}
+			}
+			if readErr != nil {
+				break
+			}
+		}
+	} else {
+		io.Copy(w, resp.Body)
+	}
+}
+
+func (h *Handler) callNodeChat(ctx context.Context, body map[string]any) (*providers.UpstreamResult, string) {
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return nil, "marshal error"
+	}
+	nodeURL := "http://127.0.0.1:20127/api/v1/chat/completions"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, nodeURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, "request error"
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream, application/json")
+
+	if keys, err := repos.ListAPIKeys(h.DB); err == nil {
+		for _, k := range keys {
+			if k.IsActive {
+				req.Header.Set("Authorization", "Bearer "+k.Key)
+				break
+			}
+		}
+	}
+
+	client := &http.Client{Timeout: 0}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err.Error()
+	}
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		resp.Body.Close()
+		return nil, string(respBody)
+	}
+	return &providers.UpstreamResult{
+		Response: resp,
+		Status:   resp.StatusCode,
+		Success:  true,
+	}, ""
+}
+
 

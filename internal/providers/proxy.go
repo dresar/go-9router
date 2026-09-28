@@ -183,12 +183,21 @@ func DoUpstreamWithProxy(ctx context.Context, req *http.Request, db *sql.DB, cre
 		return nil, fmt.Errorf("resolve proxy: %w", err)
 	}
 
+	var bodyBytes []byte
+	if req.Body != nil {
+		bodyBytes, _ = io.ReadAll(req.Body)
+		req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	}
+
+	origURL := *req.URL
+	origHost := req.Host
+
 	switch resolved.Mode {
 	case ProxyModeRelay:
-		targetBase := fmt.Sprintf("%s://%s", req.URL.Scheme, req.URL.Host)
-		targetPath := req.URL.Path
-		if req.URL.RawQuery != "" {
-			targetPath += "?" + req.URL.RawQuery
+		targetBase := fmt.Sprintf("%s://%s", origURL.Scheme, origURL.Host)
+		targetPath := origURL.Path
+		if origURL.RawQuery != "" {
+			targetPath += "?" + origURL.RawQuery
 		}
 
 		parsedRelay, err := url.Parse(resolved.RelayURL)
@@ -209,25 +218,45 @@ func DoUpstreamWithProxy(ctx context.Context, req *http.Request, db *sql.DB, cre
 
 		logging.Info("PROXY", fmt.Sprintf("▶ RELAY [%s/%s] %s -> %s%s", resolved.PoolType, resolved.PoolName, resolved.RelayURL, targetBase, targetPath))
 
+		if len(bodyBytes) > 0 {
+			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+		}
 		res, err := DoUpstream(ctx, req)
-		if (err != nil || (res != nil && (res.Status == 404 || res.Status == 502))) && !resolved.StrictProxy && db != nil {
-			// Failover: if this relay failed with network error or dead deployment (404/502), try another active relay
+		if (err != nil || (res != nil && (res.Status == 404 || res.Status == 500 || res.Status == 502 || res.Status == 503))) && !resolved.StrictProxy && db != nil {
+			// Failover: if this relay failed with network error or dead deployment, try another active relay
 			logging.Warn("PROXY", fmt.Sprintf("Relay %s failed, attempting failover...", resolved.RelayURL))
 			activePools, _ := repos.ListProxyPools(db, true)
 			for _, alt := range activePools {
 				altType := strings.ToLower(alt.Type)
-				if alt.ID != resolved.PoolID && (altType == "vercel" || altType == "cloudflare") && alt.ProxyURL != "" && alt.TestStatus != "error" {
+				if alt.ID != resolved.PoolID && (altType == "vercel" || altType == "cloudflare" || altType == "deno") && alt.ProxyURL != "" && alt.TestStatus != "error" {
 					if altRelay, err2 := url.Parse(alt.ProxyURL); err2 == nil {
 						req.URL.Scheme = altRelay.Scheme
 						req.URL.Host = altRelay.Host
 						req.URL.Path = altRelay.Path
 						req.URL.RawQuery = altRelay.RawQuery
 						req.Host = altRelay.Host
+						if len(bodyBytes) > 0 {
+							req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+						}
 						logging.Info("PROXY", fmt.Sprintf("▶ FAILOVER RELAY [%s/%s] %s -> %s%s", alt.Type, alt.Name, alt.ProxyURL, targetBase, targetPath))
-						return DoUpstream(ctx, req)
+						altRes, altErr := DoUpstream(ctx, req)
+						if altErr == nil && altRes != nil && altRes.Status < 500 && altRes.Status != 404 {
+							return altRes, nil
+						}
 					}
 				}
 			}
+
+			// All relays failed: fall back to direct request if strictProxy is not set
+			logging.Warn("PROXY", fmt.Sprintf("All relays failed, falling back to direct connection for %s", targetBase))
+			req.URL = &origURL
+			req.Host = origHost
+			req.Header.Del("x-relay-target")
+			req.Header.Del("x-relay-path")
+			if len(bodyBytes) > 0 {
+				req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			}
+			return DoUpstream(ctx, req)
 		}
 		return res, err
 

@@ -166,6 +166,19 @@ var KnownProviders = map[string]providers.ProviderAdapter{
 	"gemini":           GeminiAdapter{},
 	"github":           GitHubCopilotAdapter{},
 	"kimi":             KimiAdapter{},
+	"cloudflare-ai":    CloudflareAIAdapter{},
+	"cf":               CloudflareAIAdapter{},
+	"cerebras":         NewGenericAPIKey("cerebras", "https://api.cerebras.ai/v1", "Bearer"),
+	"chutes":           NewGenericAPIKey("chutes", "https://llm.chutes.ai/v1", "Bearer"),
+	"novita":           NewGenericAPIKey("novita", "https://api.novita.ai/v3/openai", "Bearer"),
+	"lepton":           NewGenericAPIKey("lepton", "https://api.lepton.ai/v1", "Bearer"),
+	"deepinfra":        NewGenericAPIKey("deepinfra", "https://api.deepinfra.com/v1/openai", "Bearer"),
+	"minimax":          NewGenericAPIKey("minimax", "https://api.minimax.chat/v1", "Bearer"),
+	"minimax-cn":       NewGenericAPIKey("minimax-cn", "https://api.minimaxi.com/v1", "Bearer"),
+	"scaleway":         NewGenericAPIKey("scaleway", "https://api.scaleway.ai/v1", "Bearer"),
+	"baichuan":         NewGenericAPIKey("baichuan", "https://api.baichuan-ai.com/v1", "Bearer"),
+	"stepfun":          NewGenericAPIKey("stepfun", "https://api.stepfun.com/v1", "Bearer"),
+	"lingyi":           NewGenericAPIKey("lingyi", "https://api.lingyiwanwu.com/v1", "Bearer"),
 	"groq":             NewGenericAPIKey("groq", "https://api.groq.com/openai", "Bearer"),
 	"openrouter":       NewGenericAPIKey("openrouter", "https://openrouter.ai/api", "Bearer"),
 	"deepseek":         NewGenericAPIKey("deepseek", "https://api.deepseek.com", "Bearer"),
@@ -202,6 +215,9 @@ func GetAdapter(providerID string) (providers.ProviderAdapter, bool) {
 func GetAdapterWithCreds(providerID string, creds *providers.Credentials) (providers.ProviderAdapter, bool) {
 	if a, ok := KnownProviders[providerID]; ok {
 		return a, true
+	}
+	if providerID == "cloudflare-ai" || providerID == "cf" {
+		return CloudflareAIAdapter{}, true
 	}
 	if creds != nil {
 		bURL := creds.BaseURL

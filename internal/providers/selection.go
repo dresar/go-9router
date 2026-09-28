@@ -330,20 +330,62 @@ func ClearError(db *sql.DB, connectionID string) error {
 	return err
 }
 
+func normalizeProviderAlias(alias string) string {
+	lower := strings.ToLower(strings.TrimSpace(alias))
+	switch lower {
+	case "cf", "cloudflare":
+		return "cloudflare-ai"
+	case "qd":
+		return "qoder"
+	case "google":
+		return "gemini"
+	case "claude":
+		return "anthropic"
+	case "mimo", "xiaomi":
+		return "xiaomi-mimo"
+	case "grok":
+		return "xai"
+	case "copilot":
+		return "github"
+	case "codebuddy":
+		return "codebuddy-intl"
+	case "moonshot":
+		return "kimi"
+	case "cb":
+		return "cerebras"
+	case "ch":
+		return "chutes"
+	default:
+		return alias
+	}
+}
+
 func ResolveModelProvider(modelStr string, db *sql.DB) (provider, model string, ok bool) {
 	if modelStr == "" {
 		return "", "", false
 	}
+
+	// 1. Direct Cloudflare AI model detection (@cf/...)
+	if strings.HasPrefix(modelStr, "@cf/") {
+		return "cloudflare-ai", modelStr, true
+	}
+
+	// 2. Explicit provider/model or alias/model pattern
 	parts := strings.SplitN(modelStr, "/", 2)
 	if len(parts) == 2 && parts[0] != "" && parts[1] != "" {
-		return parts[0], parts[1], true
+		prov := normalizeProviderAlias(parts[0])
+		modelID := parts[1]
+		if prov == "cloudflare-ai" && !strings.HasPrefix(modelID, "@cf/") && !strings.Contains(modelID, "/") {
+			modelID = "@cf/" + modelID
+		}
+		return prov, modelID, true
 	}
 	alias, _ := repos.KVGet(db, "modelAliases", modelStr)
 	if alias != nil {
 		if s, ok := alias.(string); ok {
 			parts = strings.SplitN(s, "/", 2)
 			if len(parts) == 2 {
-				return parts[0], parts[1], true
+				return normalizeProviderAlias(parts[0]), parts[1], true
 			}
 		}
 	}
