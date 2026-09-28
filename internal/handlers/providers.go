@@ -45,7 +45,7 @@ func (h *Handler) HandleProviderByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if id == "test-batch" {
-		h.HandleTestBatch(w, r)
+		h.HandleFrontend(w, r)
 		return
 	}
 	if id == "validate" {
@@ -63,14 +63,8 @@ func (h *Handler) HandleProviderByID(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			switch action {
-			case "models":
+			case "models", "test", "test-models":
 				h.HandleFrontend(w, r)
-				return
-			case "test":
-				h.HandleProviderTest(w, r, connID)
-				return
-			case "test-models":
-				h.HandleProviderTestModels(w, r, connID)
 				return
 			}
 		}

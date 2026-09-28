@@ -99,7 +99,56 @@ const OAUTH_TEST_CONFIG = {
     authHeader: "Authorization",
     authPrefix: "Bearer ",
   },
-  "codebuddy-cn": { tokenExists: true },
+  "codebuddy-cn": {
+    url: "https://copilot.tencent.com/v2/chat/completions",
+    method: "POST",
+    authHeader: "Authorization",
+    authPrefix: "Bearer ",
+    extraHeaders: {
+      "Content-Type": "application/json",
+      "User-Agent": "IDE/2.108.1 CodeBuddy/2.108.1",
+      "X-Product": "SaaS",
+      "X-IDE-Type": "IDE",
+      "X-IDE-Name": "IDE",
+      "x-requested-with": "XMLHttpRequest",
+      "x-codebuddy-request": "1",
+    },
+    body: JSON.stringify({
+      model: "glm-5.0",
+      stream: true,
+      messages: [
+        { role: "system", content: "You are CodeBuddy Code." },
+        { role: "user", content: [{ type: "text", text: "hi" }] },
+      ],
+    }),
+    acceptStatuses: [200, 400, 429],
+    refreshable: false,
+  },
+  "codebuddy-intl": {
+    url: "https://www.codebuddy.ai/v2/chat/completions",
+    method: "POST",
+    authHeader: "Authorization",
+    authPrefix: "Bearer ",
+    extraHeaders: {
+      "Content-Type": "application/json",
+      "User-Agent": "IDE/2.108.1 CodeBuddy/2.108.1",
+      "X-Product": "SaaS",
+      "X-IDE-Type": "IDE",
+      "X-IDE-Name": "IDE",
+      "x-requested-with": "XMLHttpRequest",
+      "x-codebuddy-request": "1",
+    },
+    body: JSON.stringify({
+      model: "glm-5.0",
+      stream: true,
+      messages: [
+        { role: "system", content: "You are CodeBuddy Code." },
+        { role: "user", content: [{ type: "text", text: "hi" }] },
+      ],
+    }),
+    acceptStatuses: [200, 400, 429],
+    refreshable: false,
+  },
   kimchi: {
     url: KIMCHI_CONFIG.validationUrl || "https://api.cast.ai/v1/llm/openai/supported-providers",
     method: "GET",
@@ -843,8 +892,37 @@ case "llm7": {
         }, effectiveProxy);
         return { valid: res.ok, error: res.ok ? null : "Invalid API key", refreshed: false };
       }
-      default:
+      case "geraikita": {
+        const res = await fetchWithConnectionProxy("https://ai.geraikita.com/v1/claude/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${connection.apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "gpt-5.6-sol",
+            max_tokens: 1,
+            messages: [{ role: "user", content: "ping" }],
+          }),
+        }, effectiveProxy);
+        const valid = res.status !== 401 && res.status !== 403;
+        return { valid, error: valid ? null : "Invalid GeraiKita API key" };
+      }
+      default: {
+        const prov = PROVIDERS[connection.provider];
+        const validateUrl = prov?.validateUrl || prov?.transport?.validateUrl;
+        const baseUrl = prov?.baseUrl || prov?.transport?.baseUrl;
+        const targetUrl = validateUrl || (baseUrl ? baseUrl.replace(/\/chat\/completions$/, "").replace(/\/messages$/, "").replace(/\/$/, "") + "/models" : null);
+        if (targetUrl) {
+          const authHdr = prov?.transport?.auth?.header || "Authorization";
+          const authScheme = prov?.transport?.auth?.scheme === "bearer" ? "Bearer " : (prov?.transport?.auth?.scheme ? `${prov.transport.auth.scheme} ` : "Bearer ");
+          const res = await fetchWithConnectionProxy(targetUrl, {
+            headers: { [authHdr]: `${authScheme}${connection.apiKey}` },
+          }, effectiveProxy);
+          return { valid: res.ok, error: res.ok ? null : `API returned ${res.status}` };
+        }
         return { valid: false, error: "Provider test not supported" };
+      }
     }
   } catch (err) {
     return { valid: false, error: err.message };
