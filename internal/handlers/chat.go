@@ -37,7 +37,10 @@ func (h *Handler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	settings, _ := repos.GetSettings(h.DB)
-	if strings.ToLower(r.Header.Get("x-9router-token-saver")) != "off" {
+	isPlayground := strings.ToLower(r.Header.Get("x-playground")) == "true" ||
+		strings.Contains(r.Header.Get("Referer"), "/playground") ||
+		strings.ToLower(r.Header.Get("x-9router-token-saver")) == "off"
+	if !isPlayground {
 		tokensaver.ApplyTokenSaver(body, settings)
 	}
 

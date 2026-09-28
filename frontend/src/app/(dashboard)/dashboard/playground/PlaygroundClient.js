@@ -539,6 +539,8 @@ export default function PlaygroundClient() {
 
     const headers = {
       "Content-Type": "application/json",
+      "x-playground": "true",
+      "x-9router-token-saver": "off",
     };
     if (selectedKey) {
       headers["Authorization"] = `Bearer ${selectedKey}`;
@@ -592,6 +594,16 @@ export default function PlaygroundClient() {
             } catch {
               // Ignore partial chunks
             }
+          }
+        }
+
+        if (!fullText && buffer.trim()) {
+          try {
+            const errObj = JSON.parse(buffer.trim());
+            const msg = errObj.error?.message || errObj.message || buffer.trim();
+            setChatError(typeof msg === "string" ? msg : JSON.stringify(msg));
+          } catch {
+            setChatResponse(buffer.trim());
           }
         }
 

@@ -174,6 +174,55 @@ func ResolveProxy(db *sql.DB, creds *Credentials, targetURL string) (*ResolvedPr
 	return &ResolvedProxy{Mode: ProxyModeDirect}, nil
 }
 
+func isBogusRelayResult(res *UpstreamResult) bool {
+	if res == nil {
+		return true
+	}
+	if strings.Contains(res.Error, "Hello, Deno!") || strings.Contains(res.Error, "Welcome to Deno") {
+		return true
+	}
+	if res.Response != nil && res.Response.Body != nil {
+		peekBuf := make([]byte, 64)
+		n, _ := io.ReadFull(res.Response.Body, peekBuf)
+		if n > 0 {
+			peek := string(peekBuf[:n])
+			if strings.Contains(peek, "Hello, Deno!") || strings.Contains(peek, "Welcome to Deno") {
+				return true
+			}
+			res.Response.Body = struct {
+				io.Reader
+				io.Closer
+			}{
+				Reader: io.MultiReader(bytes.NewReader(peekBuf[:n]), res.Response.Body),
+				Closer: res.Response.Body,
+			}
+		}
+	}
+	return false
+}
+
+func isRelayInfrastructureError(res *UpstreamResult, err error) bool {
+	if err != nil {
+		return true
+	}
+	if res == nil {
+		return true
+	}
+	if res.Status == 500 || res.Status == 502 || res.Status == 503 || res.Status == 521 || res.Status == 522 {
+		return true
+	}
+	if res.Status == 404 {
+		trimErr := strings.TrimSpace(res.Error)
+		if strings.HasPrefix(trimErr, "<") || strings.Contains(trimErr, "DEPLOYMENT_NOT_FOUND") || (!strings.HasPrefix(trimErr, "{") && !strings.HasPrefix(trimErr, "[")) {
+			return true
+		}
+	}
+	if isBogusRelayResult(res) {
+		return true
+	}
+	return false
+}
+
 func DoUpstreamWithProxy(ctx context.Context, req *http.Request, db *sql.DB, creds *Credentials) (*UpstreamResult, error) {
 	req = req.WithContext(ctx)
 
@@ -221,8 +270,9 @@ func DoUpstreamWithProxy(ctx context.Context, req *http.Request, db *sql.DB, cre
 		if len(bodyBytes) > 0 {
 			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 		}
+
 		res, err := DoUpstream(ctx, req)
-		if (err != nil || (res != nil && (res.Status == 404 || res.Status == 500 || res.Status == 502 || res.Status == 503))) && !resolved.StrictProxy && db != nil {
+		if isRelayInfrastructureError(res, err) && !resolved.StrictProxy && db != nil {
 			// Failover: if this relay failed with network error or dead deployment, try another active relay
 			logging.Warn("PROXY", fmt.Sprintf("Relay %s failed, attempting failover...", resolved.RelayURL))
 			activePools, _ := repos.ListProxyPools(db, true)
@@ -240,7 +290,7 @@ func DoUpstreamWithProxy(ctx context.Context, req *http.Request, db *sql.DB, cre
 						}
 						logging.Info("PROXY", fmt.Sprintf("▶ FAILOVER RELAY [%s/%s] %s -> %s%s", alt.Type, alt.Name, alt.ProxyURL, targetBase, targetPath))
 						altRes, altErr := DoUpstream(ctx, req)
-						if altErr == nil && altRes != nil && altRes.Status < 500 && altRes.Status != 404 {
+						if !isRelayInfrastructureError(altRes, altErr) {
 							return altRes, nil
 						}
 					}
@@ -333,8 +383,13 @@ func TestProxyPool(p *repos.ProxyPool) (ok bool, status int, elapsedMs int64, er
 		}
 		defer resp.Body.Close()
 
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			return true, resp.StatusCode, elapsed, ""
+			bodyStr := string(body)
+			if strings.Contains(bodyStr, "httpbin.org") || strings.Contains(bodyStr, `"origin"`) || strings.Contains(bodyStr, `"url"`) {
+				return true, resp.StatusCode, elapsed, ""
+			}
+			return false, resp.StatusCode, elapsed, "relay returned dummy non-relay content"
 		}
 		return false, resp.StatusCode, elapsed, fmt.Sprintf("relay returned status %d", resp.StatusCode)
 	}

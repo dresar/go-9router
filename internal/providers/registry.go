@@ -106,7 +106,7 @@ func ShouldFallback(status int) bool {
 	switch status {
 	case 429, 503, 529, 402:
 		return true
-	case 401, 403:
+	case 401, 403, 404:
 		return true
 	}
 	if status >= 500 {
