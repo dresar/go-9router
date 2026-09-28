@@ -187,6 +187,10 @@ export async function GET(request, { params }) {
   } catch (error) {
     const provider = connection?.provider ?? "unknown";
     console.warn(`[Usage] ${provider}: ${error.message}`);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({
+      plan: "Free",
+      quotas: [],
+      message: error.message || "Failed to fetch quota from provider",
+    }, { status: 200 });
   }
 }

@@ -82,25 +82,11 @@ const nextConfig = {
   },
   async rewrites() {
     const goBackend = process.env.GO_BACKEND_URL || "http://127.0.0.1:20128";
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${goBackend}/api/:path*`
-      },
-      {
-        source: "/v1/:path*",
-        destination: `${goBackend}/v1/:path*`
-      },
-      {
-        source: "/responses",
-        destination: `${goBackend}/responses`
-      },
-      {
-        source: "/codex/:path*",
-        destination: `${goBackend}/codex/:path*`
-      },
-      {
-        source: "/skills",
+    return {
+      beforeFiles: [],
+      afterFiles: [
+        {
+          source: "/skills",
         destination: "/dashboard/skills"
       },
       {
@@ -223,8 +209,27 @@ const nextConfig = {
         source: "/pxpipe",
         destination: "/dashboard/pxpipe"
       }
-    ];
-  }
+    ],
+    fallback: [
+      {
+        source: "/api/:path((?!usage).*)",
+        destination: `${goBackend}/api/:path*`
+      },
+      {
+        source: "/v1/:path*",
+        destination: `${goBackend}/v1/:path*`
+      },
+      {
+        source: "/responses",
+        destination: `${goBackend}/responses`
+      },
+      {
+        source: "/codex/:path*",
+        destination: `${goBackend}/codex/:path*`
+      }
+    ]
+  };
+}
 };
 
 export default nextConfig;

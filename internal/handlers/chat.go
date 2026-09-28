@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dresar/go-9router/internal/combo"
 	"github.com/dresar/go-9router/internal/logging"
 	"github.com/dresar/go-9router/internal/providers"
 	"github.com/dresar/go-9router/internal/providers/adapters"
@@ -57,31 +59,69 @@ func (h *Handler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if comboModels := resolveCombo(h.DB, modelStr); len(comboModels) > 0 {
-		h.handleComboChat(w, r, body, comboModels)
+	if c := resolveCombo(h.DB, modelStr); c != nil && len(c.Models) > 0 {
+		h.handleComboChat(w, r, body, c)
 		return
 	}
 
 	h.handleSingleChat(w, r, body, modelStr)
 }
 
-func (h *Handler) handleComboChat(w http.ResponseWriter, r *http.Request, body map[string]any, models []string) {
-	for _, m := range models {
+func (h *Handler) handleComboChat(w http.ResponseWriter, r *http.Request, body map[string]any, c *repos.Combo) {
+	settings, _ := repos.GetSettings(h.DB)
+	comboStrategy := "round-robin"
+	if s, ok := settings["comboStrategy"].(string); ok && s != "" {
+		comboStrategy = s
+	}
+	if strats, ok := settings["comboStrategies"].(map[string]any); ok {
+		if cs, ok := strats[c.Name].(map[string]any); ok {
+			if fs, ok := cs["fallbackStrategy"].(string); ok && fs != "" {
+				comboStrategy = fs
+			}
+		}
+	}
+	stickyLimit := 1
+	if sl, ok := settings["comboStickyLimit"].(float64); ok && sl > 0 {
+		stickyLimit = int(sl)
+	}
+
+	candidateModels := combo.DefaultEngine.GetRotatedModels(c.Name, c.Models, comboStrategy, stickyLimit)
+	hasVision := combo.DetectRequiredCapabilities(body)
+	if hasVision {
+		candidateModels = combo.ReorderByCapabilities(candidateModels, true)
+	}
+
+	var lastError string
+	for i, m := range candidateModels {
 		bodyCopy := copyMap(body)
 		bodyCopy["model"] = m
-		result := h.trySingleChat(r, bodyCopy, m)
+		logging.Info("COMBO", fmt.Sprintf("Trying combo [%s] model %d/%d: %s (strategy: %s)", c.Name, i+1, len(candidateModels), m, comboStrategy))
+
+		result, errStr := h.trySingleChatWithFallback(r, bodyCopy, m)
 		if result == nil {
+			if errStr != "" {
+				lastError = errStr
+			}
 			continue
 		}
 		defer result.Response.Body.Close()
+		logging.Info("COMBO", fmt.Sprintf("Model %s succeeded for combo %s", m, c.Name))
 		if stream.IsSSERequest(body) {
-			stream.ProxySSE(r.Context(), w, result.Response)
+			if err := stream.ProxySSE(r.Context(), w, result.Response); err != nil {
+				logging.Warn("STREAM", "SSE proxy error", "err", err)
+			}
 		} else {
-			stream.ProxyJSON(result.Response, w)
+			if err := stream.ProxyJSON(result.Response, w); err != nil {
+				logging.Warn("CHAT", "JSON proxy error", "err", err)
+			}
 		}
 		return
 	}
-	h.JSONError(w, http.StatusServiceUnavailable, "all combo models unavailable")
+
+	if lastError == "" {
+		lastError = "all combo models unavailable"
+	}
+	h.JSONError(w, http.StatusServiceUnavailable, lastError)
 }
 
 func (h *Handler) handleSingleChat(w http.ResponseWriter, r *http.Request, body map[string]any, modelStr string) {
@@ -194,40 +234,79 @@ func (h *Handler) handleSingleChat(w http.ResponseWriter, r *http.Request, body 
 	}
 }
 
-func (h *Handler) trySingleChat(r *http.Request, body map[string]any, modelStr string) *providers.UpstreamResult {
+func (h *Handler) trySingleChatWithFallback(r *http.Request, body map[string]any, modelStr string) (*providers.UpstreamResult, string) {
 	providerID, modelID, ok := providers.ResolveModelProvider(modelStr, h.DB)
 	if !ok {
-		return nil
+		return nil, fmt.Sprintf("cannot resolve provider for model: %s", modelStr)
 	}
-	sel, err := providers.SelectCredentials(h.DB, providerID, nil)
-	if err != nil || sel == nil || sel.AllLocked {
-		return nil
-	}
-	body["model"] = modelID
-	adapter, known := adapters.GetAdapterWithCreds(providerID, sel.Credentials)
-	if !known {
-		return nil
-	}
-	req, err := adapter.BuildRequest(r.Context(), body, sel.Credentials)
-	if err != nil {
-		return nil
-	}
-	result, err := providers.DoUpstreamWithProxy(r.Context(), req, h.DB, sel.Credentials)
-	if err != nil || !result.Success {
-		if result != nil && result.Response != nil {
+
+	exclude := map[string]bool{}
+	startTime := time.Now()
+
+	for attempt := 0; attempt < 3; attempt++ {
+		sel, err := providers.SelectCredentials(h.DB, providerID, exclude)
+		if err != nil || sel == nil || sel.AllLocked {
+			break
+		}
+
+		body["model"] = modelID
+		adapter, known := adapters.GetAdapterWithCreds(providerID, sel.Credentials)
+		if !known {
+			providers.RecordConnectionEnd(sel.Credentials.ConnectionID)
+			break
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+		req, err := adapter.BuildRequest(ctx, body, sel.Credentials)
+		if err != nil {
+			cancel()
+			providers.RecordConnectionEnd(sel.Credentials.ConnectionID)
+			break
+		}
+
+		result, err := providers.DoUpstreamWithProxy(ctx, req, h.DB, sel.Credentials)
+		cancel()
+
+		latencyMs := time.Since(startTime).Milliseconds()
+		if err != nil {
+			providers.RecordConnectionFailure(h.DB, sel.Credentials.ConnectionID, http.StatusBadGateway, err.Error())
+			go h.recordObservability(providerID, modelStr, sel.Credentials.ConnectionID, "502", latencyMs, body)
+			exclude[sel.Credentials.ConnectionID] = true
+			continue
+		}
+
+		if result.Success {
+			providers.RecordConnectionSuccess(h.DB, sel.Credentials.ConnectionID, latencyMs)
+			go h.recordObservability(providerID, modelStr, sel.Credentials.ConnectionID, "success", latencyMs, body)
+			return result, ""
+		}
+
+		if providers.ShouldFallback(result.Status) {
+			providers.RecordConnectionFailure(h.DB, sel.Credentials.ConnectionID, result.Status, result.Error)
+			go h.recordObservability(providerID, modelStr, sel.Credentials.ConnectionID, fmt.Sprintf("%d", result.Status), latencyMs, body)
+			exclude[sel.Credentials.ConnectionID] = true
+			if result.Response != nil {
+				result.Response.Body.Close()
+			}
+			continue
+		}
+
+		if result.Response != nil {
 			result.Response.Body.Close()
 		}
-		return nil
+		providers.RecordConnectionEnd(sel.Credentials.ConnectionID)
+		return nil, result.Error
 	}
-	return result
+
+	return nil, fmt.Sprintf("provider '%s' temporarily unavailable", providerID)
 }
 
-func resolveCombo(db *sql.DB, modelStr string) []string {
+func resolveCombo(db *sql.DB, modelStr string) *repos.Combo {
 	combo, err := repos.GetComboByName(db, modelStr)
 	if err != nil || combo == nil {
 		return nil
 	}
-	return combo.Models
+	return combo
 }
 
 func extractAPIKey(r *http.Request) string {

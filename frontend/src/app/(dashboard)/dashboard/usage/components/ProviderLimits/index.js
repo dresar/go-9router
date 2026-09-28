@@ -251,7 +251,7 @@ export default function ProviderLimits() {
         `[ProviderLimits] Fetching quota for ${provider} (${connectionId})`,
       );
       const url = `/api/usage/${connectionId}${force ? "?force=1" : ""}`;
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -259,32 +259,19 @@ export default function ProviderLimits() {
 
         // Handle different error types gracefully
         if (response.status === 404) {
-          // Connection not found - skip silently
-          console.warn(
-            `[ProviderLimits] Connection not found for ${provider}, skipping`,
-          );
           return;
         }
 
-        if (response.status === 401) {
-          // Auth error - show message instead of throwing
-          console.warn(
-            `[ProviderLimits] Auth error for ${provider}:`,
-            errorMsg,
-          );
-          const quotaEntry = {
-            quotas: [],
-            message: errorMsg,
-          };
-          setQuotaData((prev) => ({
-            ...prev,
-            [connectionId]: quotaEntry,
-          }));
-          setQuotaCache(connectionId, quotaEntry);
-          return;
-        }
-
-        throw new Error(`HTTP ${response.status}: ${errorMsg}`);
+        const quotaEntry = {
+          quotas: [],
+          message: errorMsg || `HTTP ${response.status}`,
+        };
+        setQuotaData((prev) => ({
+          ...prev,
+          [connectionId]: quotaEntry,
+        }));
+        setQuotaCache(connectionId, quotaEntry);
+        return;
       }
 
       const data = await response.json();

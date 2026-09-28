@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/dresar/go-9router/internal/config"
@@ -24,7 +26,12 @@ func (h *Handler) JSONError(w http.ResponseWriter, status int, msg string) {
 }
 
 func (h *Handler) DecodeJSON(r *http.Request, v any) error {
-	return json.NewDecoder(r.Body).Decode(v)
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		return err
+	}
+	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
+	return json.Unmarshal(data, v)
 }
 
 func MethodRouter(handlers map[string]http.HandlerFunc) http.HandlerFunc {

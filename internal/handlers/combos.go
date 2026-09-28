@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 
+	"github.com/dresar/go-9router/internal/combo"
 	"github.com/dresar/go-9router/internal/storage/repos"
 )
 
@@ -21,7 +23,7 @@ func (h *Handler) HandleCombos(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		var body repos.Combo
 		if err := h.DecodeJSON(r, &body); err != nil {
-			h.JSONError(w, http.StatusBadRequest, "invalid JSON")
+			h.JSONError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 			return
 		}
 		if body.Name == "" {
@@ -100,19 +102,62 @@ func (h *Handler) HandleComboPresets(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
+		combos, _ := repos.ListCombos(h.DB)
+		var existingNames []string
+		for _, c := range combos {
+			existingNames = append(existingNames, c.Name)
+		}
+		items := combo.BuildPresets(source, existingNames)
+		toCreate := 0
+		toSkip := 0
+		for _, it := range items {
+			if it.Exists {
+				toSkip++
+			} else {
+				toCreate++
+			}
+		}
 		h.JSON(w, http.StatusOK, map[string]any{
 			"source":   source,
-			"items":    []any{},
-			"toCreate": 0,
-			"toSkip":   0,
+			"items":    items,
+			"toCreate": toCreate,
+			"toSkip":   toSkip,
 		})
 	case http.MethodPost:
+		var req struct {
+			Source string `json:"source"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if req.Source != "" {
+			source = req.Source
+		}
+		combos, _ := repos.ListCombos(h.DB)
+		var existingNames []string
+		for _, c := range combos {
+			existingNames = append(existingNames, c.Name)
+		}
+		items := combo.BuildPresets(source, existingNames)
+		var created []repos.Combo
+		var skipped []string
+		for _, it := range items {
+			if it.Exists {
+				skipped = append(skipped, it.Name)
+				continue
+			}
+			newCombo, err := repos.CreateCombo(h.DB, repos.Combo{
+				Name:   it.Name,
+				Models: it.Models,
+			})
+			if err == nil && newCombo != nil {
+				created = append(created, *newCombo)
+			}
+		}
 		h.JSON(w, http.StatusOK, map[string]any{
 			"source":       source,
-			"created":      []any{},
-			"skipped":      []any{},
-			"createdCount": 0,
-			"skippedCount": 0,
+			"created":      created,
+			"skipped":      skipped,
+			"createdCount": len(created),
+			"skippedCount": len(skipped),
 		})
 	default:
 		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")

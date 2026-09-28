@@ -203,15 +203,30 @@ func (h *Handler) HandleUsageConnectionSub(w http.ResponseWriter, r *http.Reques
 	}
 
 	// 1. If Next.js / Node.js backend is active on port 20127, proxy so provider-specific quota engines run
-	if isPortOpen("127.0.0.1", 20127) {
+	if r.Header.Get("X-Go-Gateway") == "" && isPortOpen("127.0.0.1", 20127) {
 		target, err := url.Parse("http://127.0.0.1:20127")
 		if err == nil {
 			proxy := httputil.NewSingleHostReverseProxy(target)
+			originalDirector := proxy.Director
+			proxy.Director = func(req *http.Request) {
+				originalDirector(req)
+				req.Header.Set("X-Go-Gateway", "1")
+			}
+			proxy.Transport = &http.Transport{
+				ResponseHeaderTimeout: 8 * time.Second,
+			}
+			proxy.ErrorHandler = func(rw http.ResponseWriter, req *http.Request, pErr error) {
+				h.serveLocalQuota(rw, req, sub)
+			}
 			proxy.ServeHTTP(w, r)
 			return
 		}
 	}
 
+	h.serveLocalQuota(w, r, sub)
+}
+
+func (h *Handler) serveLocalQuota(w http.ResponseWriter, r *http.Request, sub string) {
 	conn, err := repos.GetConnection(h.DB, sub)
 	if err != nil || conn == nil {
 		h.HandleUsageStats(w, r)
