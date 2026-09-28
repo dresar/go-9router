@@ -76,10 +76,36 @@ func (h *Handler) HandleFrontend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Check if static exported build exists in frontend/out or web/out
-	for _, dir := range []string{"frontend/out", "web/out", "public"} {
-		filePath := filepath.Join(dir, strings.TrimPrefix(r.URL.Path, "/"))
+	// 1. Direct high-speed static asset serving for _next/static
+	if strings.HasPrefix(r.URL.Path, "/_next/static/") {
+		sub := strings.TrimPrefix(r.URL.Path, "/_next/static/")
+		for _, baseDir := range []string{
+			filepath.Join("frontend", ".next", "static"),
+			filepath.Join("frontend", ".next", "standalone", ".next", "static"),
+			filepath.Join(".next", "static"),
+		} {
+			target := filepath.Join(baseDir, filepath.FromSlash(sub))
+			if fi, err := os.Stat(target); err == nil && !fi.IsDir() {
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				http.ServeFile(w, r, target)
+				return
+			}
+		}
+	}
+
+	// 2. Direct high-speed serving for public assets (i18n, icons, favicon, manifest, etc.)
+	for _, dir := range []string{
+		filepath.Join("frontend", "public"),
+		filepath.Join("frontend", ".next", "standalone", "public"),
+		"public",
+		filepath.Join("frontend", "out"),
+		filepath.Join("web", "out"),
+	} {
+		filePath := filepath.Join(dir, filepath.FromSlash(strings.TrimPrefix(r.URL.Path, "/")))
 		if fi, err := os.Stat(filePath); err == nil && !fi.IsDir() {
+			if strings.HasSuffix(filePath, ".json") {
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			}
 			http.ServeFile(w, r, filePath)
 			return
 		}
@@ -90,7 +116,7 @@ func (h *Handler) HandleFrontend(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 2. Ensure Next.js dashboard server on port 20127 is active
+	// 3. Ensure Next.js dashboard server on port 20127 is active
 	if !isPortOpen("127.0.0.1", 20127) {
 		EnsureNextServer()
 	}
