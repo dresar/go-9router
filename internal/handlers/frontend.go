@@ -44,8 +44,10 @@ func EnsureNextServer() {
 		return
 	}
 
-	cmd := exec.Command(nodeBin, filepath.Base(serverFile))
+	absStandaloneDir, _ := filepath.Abs(standaloneDir)
 	absDataDir, _ := filepath.Abs("data")
+	cmd := exec.Command(nodeBin, filepath.Base(serverFile))
+	cmd.Dir = absStandaloneDir
 	cmd.Env = append(os.Environ(), "PORT=20127", "HOSTNAME=0.0.0.0", "NODE_ENV=production", "DATA_DIR="+absDataDir)
 	if runtime.GOOS == "windows" {
 		cmd.SysProcAttr = &syscall.SysProcAttr{

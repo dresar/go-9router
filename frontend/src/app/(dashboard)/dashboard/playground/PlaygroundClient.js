@@ -26,7 +26,6 @@ const PROVIDER_NAMES = {
   kiro: "Kiro AI",
   cline: "Cline",
   clinepass: "Cline Pass",
-  qoder: "Qoder",
   nvidia: "NVIDIA NIM",
   xai: "xAI Grok",
   ollama: "Ollama",
@@ -38,24 +37,6 @@ const PROVIDER_NAMES = {
 
 // Provider Presets for Chat Models (Curated free-tier and popular models)
 const DEFAULT_PROVIDER_MODELS = {
-  qoder: [
-    { id: "qoder/ultimate", name: "Ultimate", subtitle: "Qoder Flagship" },
-    { id: "qoder/auto", name: "Auto", subtitle: "Smart routing" },
-    { id: "qoder/performance", name: "Performance", subtitle: "High performance" },
-    { id: "qoder/efficient", name: "Efficient", subtitle: "Resource balanced" },
-    { id: "qoder/lite", name: "Lite", subtitle: "Lightweight" },
-    { id: "qoder/qmodel_38max", name: "Qwen3.8-Max", subtitle: "Alibaba Qwen" },
-    { id: "qoder/qmodel_latest", name: "Qwen3.7-Max", subtitle: "Qwen 3.7 Max" },
-    { id: "qoder/qmodel", name: "Qwen3.7-Plus", subtitle: "Qwen 3.7 Plus" },
-    { id: "qoder/qfmodel", name: "Qwen3.8-Flash", subtitle: "Qwen 3.8 Flash" },
-    { id: "qoder/kmodel_latest", name: "Kimi-K3", subtitle: "Moonshot Kimi" },
-    { id: "qoder/kmodel", name: "Kimi-K2.7-Code", subtitle: "Kimi Code" },
-    { id: "qoder/gmodel", name: "GLM-5.3", subtitle: "Zhipu GLM" },
-    { id: "qoder/gfmodel", name: "GLM-5.3-Flash", subtitle: "GLM 5.3 Flash" },
-    { id: "qoder/dmodel", name: "DeepSeek-V4-Pro", subtitle: "DeepSeek Pro" },
-    { id: "qoder/dfmodel", name: "DeepSeek-V4-Flash", subtitle: "DeepSeek Flash" },
-    { id: "qoder/mmodel", name: "MiniMax-M3", subtitle: "MiniMax" },
-  ],
   openrouter: [
     { id: "openrouter/cohere/north-mini-code:free", name: "Cohere North Mini (Free)", subtitle: "Free code reasoning" },
     { id: "openrouter/google/gemma-4-26b-a4b-it:free", name: "Gemma 4 26B (Free)", subtitle: "Google open model" },
