@@ -64,7 +64,7 @@ func (h *Handler) HandleProviderByID(w http.ResponseWriter, r *http.Request) {
 			}
 			switch action {
 			case "models":
-				h.HandleProviderModels(w, r, connID)
+				h.HandleFrontend(w, r)
 				return
 			case "test":
 				h.HandleProviderTest(w, r, connID)
@@ -413,26 +413,73 @@ func testSingleConnection(db *sql.DB, conn *repos.Connection) (valid bool, errSt
 				baseURL = u
 			}
 		}
-		if baseURL == "" && p == "bynara" {
-			baseURL = "https://router.bynara.id/v1"
+		if baseURL == "" {
+			switch p {
+			case "bynara":
+				baseURL = "https://router.bynara.id/v1"
+			case "sambanova":
+				baseURL = "https://api.sambanova.ai/v1"
+			case "cerebras":
+				baseURL = "https://api.cerebras.ai/v1"
+			case "siliconflow":
+				baseURL = "https://api.siliconflow.cn/v1"
+			case "chutes":
+				baseURL = "https://llm.chutes.ai/v1"
+			case "hyperbolic":
+				baseURL = "https://api.hyperbolic.xyz/v1"
+			case "xai":
+				baseURL = "https://api.x.ai/v1"
+			case "venice":
+				baseURL = "https://api.venice.ai/v1"
+			case "kilocode":
+				baseURL = "https://api.kilocode.com/v1"
+			case "cline":
+				baseURL = "https://api.cline.bot/api/v1"
+			case "clinepass":
+				baseURL = "https://api.clinepass.com/api/v1"
+			case "tokenrouter":
+				baseURL = "https://api.tokenrouter.com/v1"
+			case "llm7":
+				baseURL = "https://api.llm7.io/v1"
+			case "morph":
+				baseURL = "https://api.morph.so/v1"
+			case "nvidia":
+				baseURL = "https://integrate.api.nvidia.com/v1"
+			case "stepfun":
+				baseURL = "https://api.stepfun.com/v1"
+			case "together":
+				baseURL = "https://api.together.xyz/v1"
+			case "mistral":
+				baseURL = "https://api.mistral.ai/v1"
+			case "agnes":
+				baseURL = "https://apihub.agnes-ai.com/v1"
+			}
 		}
 		if baseURL != "" {
 			testURL := strings.TrimRight(baseURL, "/") + "/models"
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, testURL, nil)
-			if err == nil {
-				key := conn.APIKey
-				if key == "" {
-					key = conn.AccessToken
-				}
-				req.Header.Set("Authorization", "Bearer "+key)
-				res, err := providers.DoUpstreamWithProxy(ctx, req, db, &providers.Credentials{ProxyPoolID: conn.ProxyPoolID})
-				if err == nil && res.Status >= 200 && res.Status < 400 {
-					if res.Response != nil && res.Response.Body != nil {
-						res.Response.Body.Close()
-					}
-					return true, "", false
-				}
+			if err != nil {
+				return false, fmt.Sprintf("Failed to create probe request: %v", err), false
 			}
+			key := conn.APIKey
+			if key == "" {
+				key = conn.AccessToken
+			}
+			req.Header.Set("Authorization", "Bearer "+key)
+			res, err := providers.DoUpstreamWithProxy(ctx, req, db, &providers.Credentials{ProxyPoolID: conn.ProxyPoolID})
+			if err != nil {
+				return false, fmt.Sprintf("Upstream connection error: %v", err), false
+			}
+			if res.Response != nil && res.Response.Body != nil {
+				res.Response.Body.Close()
+			}
+			if res.Status >= 200 && res.Status < 300 {
+				return true, "", false
+			}
+			if res.Status == 401 || res.Status == 403 {
+				return false, fmt.Sprintf("Invalid API key (HTTP %d)", res.Status), false
+			}
+			return false, fmt.Sprintf("Upstream probe failed (HTTP %d)", res.Status), false
 		}
 		return true, "", false
 	}

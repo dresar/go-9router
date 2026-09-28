@@ -28,25 +28,24 @@ const PROVIDER_NAMES = {
   clinepass: "Cline Pass",
   nvidia: "NVIDIA NIM",
   xai: "xAI Grok",
-  ollama: "Ollama",
   chutes: "Chutes AI",
   "vercel-ai-gateway": "Vercel AI",
   bynara: "Bynara",
-  "codebuddy-intl": "CodeBuddy",
+  cerebras: "Cerebras AI",
+  sambanova: "SambaNova",
+  siliconflow: "SiliconFlow",
 };
 
 // Provider Presets for Chat Models (Curated free-tier and popular models)
 const DEFAULT_PROVIDER_MODELS = {
   openrouter: [
-    { id: "openrouter/cohere/north-mini-code:free", name: "Cohere North Mini (Free)", subtitle: "Free code reasoning" },
-    { id: "openrouter/google/gemma-4-26b-a4b-it:free", name: "Gemma 4 26B (Free)", subtitle: "Google open model" },
-    { id: "openrouter/meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B (Free)", subtitle: "Meta instruction tuned" },
-    { id: "openrouter/z-ai/glm-5.2:free", name: "GLM 5.2 (Free)", subtitle: "Zhipu general intelligence" },
+    { id: "openrouter/qwen/qwen3.8-27b:free", name: "Qwen 3.8 27B (Free)", subtitle: "Alibaba latest free" },
+    { id: "openrouter/nvidia/nemotron-3.5-lightning:free", name: "Nemotron 3.5 Lightning (Free)", subtitle: "NVIDIA fast reasoning" },
+    { id: "openrouter/inclusionai/ling-3.0-flash-fin:free", name: "Ling 3.0 Flash (Free)", subtitle: "Financial & reasoning" },
     { id: "openrouter/deepseek/deepseek-r1:free", name: "DeepSeek R1 (Free)", subtitle: "Advanced reasoning" },
     { id: "openrouter/deepseek/deepseek-chat:free", name: "DeepSeek V3 (Free)", subtitle: "Fast dynamic chat" },
-    { id: "openrouter/meta-llama/llama-3.1-8b-instruct:free", name: "Llama 3.1 8B (Free)", subtitle: "Lightweight free" },
-    { id: "openrouter/mistralai/mistral-7b-instruct:free", name: "Mistral 7B (Free)", subtitle: "Mistral free" },
-    { id: "openrouter/qwen/qwen-2.5-coder-32b-instruct:free", name: "Qwen 2.5 Coder 32B (Free)", subtitle: "Code generation" },
+    { id: "openrouter/meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B (Free)", subtitle: "Meta instruction tuned" },
+    { id: "openrouter/google/gemma-4-26b-a4b-it:free", name: "Gemma 4 26B (Free)", subtitle: "Google open model" },
   ],
   gemini: [
     { id: "gemini/gemini-2.5-flash", name: "Gemini 2.5 Flash", subtitle: "Fast multimodal" },
@@ -55,14 +54,25 @@ const DEFAULT_PROVIDER_MODELS = {
     { id: "gemini/gemini-1.5-pro", name: "Gemini 1.5 Pro", subtitle: "Extended window" },
   ],
   groq: [
-    { id: "groq/llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile", subtitle: "Fast 128k context" },
-    { id: "groq/llama-3.1-8b-instant", name: "Llama 3.1 8B Instant", subtitle: "Ultra low latency" },
-    { id: "groq/mixtral-8x7b-32768", name: "Mixtral 8x7B", subtitle: "MoE architecture" },
+    { id: "groq/openai/gpt-oss-120b", name: "GPT OSS 120B", subtitle: "Ultra-fast flagship reasoning" },
+    { id: "groq/qwen/qwen3.8-27b", name: "Qwen 3.8 27B", subtitle: "Alibaba next-gen on LPU" },
+    { id: "groq/openai/gpt-oss-20b", name: "GPT OSS 20B", subtitle: "Lightweight fast" },
+    { id: "groq/allam-2-7b", name: "Allam 2 7B", subtitle: "Multilingual on LPU" },
   ],
-  kimi: [
-    { id: "kimi/kimi-k2.5", name: "Kimi K2.5", subtitle: "Long context" },
-    { id: "kimi/kimi-k2", name: "Kimi K2", subtitle: "Balanced" },
-    { id: "kimi/kimi-latest", name: "Kimi Latest", subtitle: "Latest version" },
+  cerebras: [
+    { id: "cerebras/gpt-oss-120b", name: "GPT OSS 120B (Cerebras)", subtitle: "2000+ tokens/sec on WSE" },
+    { id: "cerebras/qwen-3.8-27b", name: "Qwen 3.8 27B (Cerebras)", subtitle: "Wafer-scale engine" },
+  ],
+  sambanova: [
+    { id: "sambanova/DeepSeek-V3.2", name: "DeepSeek V3.2", subtitle: "SambaNova SN40L accelerated" },
+    { id: "sambanova/Meta-Llama-3.3-70B-Instruct", name: "Llama 3.3 70B", subtitle: "Full context reasoning" },
+    { id: "sambanova/MiniMax-M3", name: "MiniMax M3", subtitle: "High-speed MoE" },
+    { id: "sambanova/gpt-oss-120b", name: "GPT OSS 120B", subtitle: "Reconfigurable dataflow" },
+  ],
+  bynara: [
+    { id: "bynara/deepseek-v4-flash-alibaba", name: "DeepSeek V4 Flash", subtitle: "Bynara router accelerated" },
+    { id: "bynara/claude-sonnet-5", name: "Claude Sonnet 5", subtitle: "Flagship intelligence" },
+    { id: "bynara/agnes-2.5-flash", name: "Agnes 2.5 Flash", subtitle: "Multimodal via Bynara" },
   ],
   kiro: [
     { id: "kiro/claude-3-7-sonnet", name: "Claude 3.7 Sonnet (Kiro)", subtitle: "Via Kiro proxy" },
