@@ -39,48 +39,23 @@ func (h *Handler) HandleOAuth(w http.ResponseWriter, r *http.Request) {
 		action = parts[1]
 	}
 
-	// 1. Providers and endpoints with specialized implementations in Next.js frontend:
-	// - xiaomi-mimo: login/start, login/status, auto-import, api-key
-	// - cursor, zed, iflow, kiro, grok-cli, gitlab: auto-import, import, tokens
-	switch provider {
-	case "xiaomi-mimo", "cursor", "zed", "iflow", "kiro", "grok-cli", "gitlab":
-		h.HandleFrontend(w, r)
-		return
-	}
-
-	if provider == "codex" && (action == "bulk-import" || action == "import-token") {
-		h.HandleFrontend(w, r)
-		return
-	}
-
-	switch action {
-	case "authorize":
-		h.handleOAuthAuthorize(w, r, provider)
-	case "exchange":
-		h.handleOAuthExchange(w, r, provider)
-	case "device-code":
-		h.handleOAuthDeviceCode(w, r, provider)
-	case "poll":
-		h.handleOAuthPoll(w, r, provider)
-	case "ide-status":
-		h.JSON(w, http.StatusOK, map[string]any{"installed": false, "path": nil})
-	case "start-proxy":
-		h.JSON(w, http.StatusOK, map[string]any{"success": false, "reason": "server_side_proxy_disabled"})
-	case "stop-proxy":
-		h.JSON(w, http.StatusOK, map[string]any{"success": true})
-	case "poll-status":
-		h.JSON(w, http.StatusOK, map[string]any{"status": "idle"})
-	case "auto-import", "import", "api-key", "login":
-		// Fallback to Next.js server for provider-specific import/login logic
-		h.HandleFrontend(w, r)
-		return
-	default:
-		if r.Method == http.MethodGet {
+	// Go directly handles server-side OAuth ONLY for Google Cloud-Platform providers
+	// (Antigravity and Gemini) which require Code Assist project ID fetching and background onboarding.
+	if provider == "antigravity" || provider == "gemini" || provider == "gemini-cli" {
+		switch action {
+		case "authorize":
 			h.handleOAuthAuthorize(w, r, provider)
 			return
+		case "exchange":
+			h.handleOAuthExchange(w, r, provider)
+			return
 		}
-		h.HandleFrontend(w, r)
 	}
+
+	// All other providers (CodeBuddy CN, CodeBuddy Intl, Qoder, Kimi, Kiro, Trae, Windsurf, Zed, xAI, Claude, Codex, GitHub, etc.)
+	// and all OAuth flows (device-code, poll, start-proxy, stop-proxy, poll-status, ide-status, register-session, manual-code, etc.)
+	// are delegated to the complete Next.js OAuth implementation:
+	h.HandleFrontend(w, r)
 }
 
 func (h *Handler) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request, provider string) {
@@ -435,28 +410,6 @@ func (h *Handler) handleOAuthExchange(w http.ResponseWriter, r *http.Request, pr
 	}
 }
 
-func (h *Handler) handleOAuthDeviceCode(w http.ResponseWriter, r *http.Request, provider string) {
-	deviceCode := uuid.NewString()
-	userCode := strings.ToUpper(uuid.NewString()[:8])
-	verifyURL := "https://github.com/login/device"
-	if provider == "qoder" || provider == "qoder-cn" {
-		verifyURL = "https://qoder.sh/activate"
-	}
-	h.JSON(w, http.StatusOK, map[string]any{
-		"device_code":               deviceCode,
-		"user_code":                 userCode,
-		"verification_uri":          verifyURL,
-		"verification_uri_complete": fmt.Sprintf("%s?user_code=%s", verifyURL, userCode),
-		"expires_in":                300,
-		"interval":                  5,
-	})
-}
-
-func (h *Handler) handleOAuthPoll(w http.ResponseWriter, r *http.Request, provider string) {
-	h.JSON(w, http.StatusOK, map[string]any{
-		"error": "authorization_pending",
-	})
-}
 
 func (h *Handler) asyncAntigravityOnboard(connID, accessToken, projectID, tierID string) {
 	// 1. If projectID is still missing, retry fetch up to 3 times
