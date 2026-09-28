@@ -67,9 +67,7 @@ func New(h *handlers.Handler, jwtSecret string) http.Handler {
 	mux.HandleFunc("/api/providers/client", auth(h.HandleProvidersClient))
 	mux.HandleFunc("/api/providers/suggested-models", auth(h.HandleSuggestedModels))
 	mux.HandleFunc("/api/providers/test-batch", auth(h.HandleTestBatch))
-	mux.HandleFunc("/api/providers/validate", auth(func(w http.ResponseWriter, r *http.Request) {
-		h.JSON(w, http.StatusOK, map[string]any{"valid": true})
-	}))
+	mux.HandleFunc("/api/providers/validate", auth(h.HandleProviderValidate))
 	mux.HandleFunc("/api/providers/", auth(h.HandleProviderByID))
 
 	mux.HandleFunc("/api/provider-nodes", auth(h.HandleNodes))

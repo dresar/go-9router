@@ -8,7 +8,7 @@ import { planBulkAdd } from "@/shared/utils/bulkAdd";
 
 const BULK_PLACEHOLDER = `name1|sk-key1\nname2|sk-key2\nsk-key-only-auto-named`;
 
-export default function AddApiKeyModal({ isOpen, provider, providerName, isCompatible, isAnthropic, authType, authHint, website, proxyPools, error, existingNames, onSave, onBulkDone, onClose }) {
+export default function AddApiKeyModal({ isOpen, provider, providerName, isCompatible, isAnthropic, authType, authHint, website, proxyPools, error, existingNames, existingApiKeys = [], onSave, onBulkDone, onClose }) {
   const NONE_PROXY_POOL_VALUE = "__none__";
   const isOllamaLocal = provider === "ollama-local";
   const isCookie = authType === "cookie";
@@ -42,6 +42,11 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState("");
+
+  const trimmedKey = (formData.apiKey || "").trim();
+  const isDuplicateKey = !isOllamaLocal && !!trimmedKey && existingApiKeys.some((k) => typeof k === "string" && k.trim() === trimmedKey);
+
   const bulkPlaceholder = isCloudflareAi
     ? `name1|sk-key1|acc123456\nname2|sk-key2|def789012\nsk-key-only-auto-named`
     : provider === "qoder" || provider === "qoder-cn"
@@ -50,7 +55,7 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
 
   const [mode, setMode] = useState("single"); // "single" | "bulk"
   const [bulkText, setBulkText] = useState("");
-  const [bulkResult, setBulkResult] = useState(null); // { success, failed }
+  const [bulkResult, setBulkResult] = useState(null); // { success, failed, duplicates }
 
   const buildProviderSpecificData = () => {
     if (isOllamaLocal && formData.ollamaHostUrl.trim()) {
@@ -74,6 +79,12 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
   };
 
   const handleValidate = async () => {
+    if (isDuplicateKey) {
+      setDuplicateWarning("Kunci API ini sudah terdaftar (duplikat)");
+      setValidationResult("duplicate");
+      return;
+    }
+    setDuplicateWarning("");
     setValidating(true);
     try {
       const res = await fetch("/api/providers/validate", {
@@ -82,7 +93,12 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
         body: JSON.stringify({ provider, apiKey: formData.apiKey, providerSpecificData: buildProviderSpecificData() }),
       });
       const data = await res.json();
-      setValidationResult(data.valid ? "success" : "failed");
+      if (data.duplicate) {
+        setDuplicateWarning(data.error || "Kunci API ini sudah terdaftar (duplikat)");
+        setValidationResult("duplicate");
+      } else {
+        setValidationResult(data.valid ? "success" : "failed");
+      }
     } catch {
       setValidationResult("failed");
     } finally {
@@ -93,8 +109,11 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
   const handleSubmit = async () => {
     if (!provider) return;
     if (!isOllamaLocal && !formData.apiKey) return;
+    if (isDuplicateKey) {
+      setDuplicateWarning("Kunci API ini sudah terdaftar (duplikat)");
+      return;
+    }
     if (!isOllamaLocal) {
-      // Non-ollama providers require a name
       if (!formData.name) return;
     }
     if (isCompatible && !formData.defaultModel.trim()) return;
@@ -105,12 +124,18 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
       try {
         setValidating(true);
         setValidationResult(null);
+        setDuplicateWarning("");
         const res = await fetch("/api/providers/validate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ provider, apiKey: formData.apiKey, providerSpecificData: buildProviderSpecificData() }),
         });
         const data = await res.json();
+        if (data.duplicate) {
+          setDuplicateWarning(data.error || "Kunci API ini sudah terdaftar (duplikat)");
+          setValidationResult("duplicate");
+          return;
+        }
         isValid = !!data.valid;
         setValidationResult(isValid ? "success" : "failed");
       } catch {
@@ -136,20 +161,20 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
   const handleBulkSubmit = async () => {
     const lines = bulkText.split("\n");
     if (!lines.length) return;
-    // Plan collision-free names against existing connections so a generated
-    // "Key N" never matches a saved name (which the backend would upsert /
-    // overwrite instead of inserting). See bulkAdd.js for the full rationale.
-    const plan = planBulkAdd(lines, existingNames, { isCloudflareAi });
+    const plan = planBulkAdd(lines, existingNames, { isCloudflareAi, existingKeys: existingApiKeys });
     if (!plan.length) return;
     setSaving(true);
     setBulkResult(null);
     let success = 0;
     let failed = 0;
+    let duplicates = 0;
     for (const entry of plan) {
+      if (entry.skipped && entry.reason === "duplicate") {
+        duplicates += 1;
+        failed += 1;
+        continue;
+      }
       try {
-        // Validate each key before saving so bulk-added connections get a
-        // real status (active/unknown) like single adds, instead of a
-        // hardcoded "unknown" that never flips until a manual test.
         let isValid = false;
         try {
           const vres = await fetch("/api/providers/validate", {
@@ -158,6 +183,11 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
             body: JSON.stringify({ provider, apiKey: entry.apiKey }),
           });
           const vdata = await vres.json().catch(() => ({}));
+          if (vdata.duplicate) {
+            duplicates += 1;
+            failed += 1;
+            continue;
+          }
           isValid = !!vdata.valid;
         } catch {
           isValid = false;
@@ -181,7 +211,7 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
       }
     }
     setSaving(false);
-    setBulkResult({ success, failed });
+    setBulkResult({ success, failed, duplicates });
     if (success > 0 && onBulkDone) onBulkDone();
   };
 
@@ -305,10 +335,16 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
             Leave blank to use <code>http://localhost:11434</code>. For remote Ollama, enter the full host URL (e.g. <code>http://192.168.1.10:11434</code>).
           </p>
         )}
-        {validationResult && (
+        {validationResult && validationResult !== "duplicate" && (
           <Badge variant={validationResult === "success" ? "success" : "error"}>
             {validationResult === "success" ? "Valid" : "Invalid"}
           </Badge>
+        )}
+        {(isDuplicateKey || duplicateWarning) && (
+          <div className="flex items-center gap-1.5 text-xs text-red-500 font-medium">
+            <span className="material-symbols-outlined text-[14px]">warning</span>
+            <span>{duplicateWarning || "Kunci API ini sudah terdaftar (duplikat)"}</span>
+          </div>
         )}
         {error && (
           <p className="text-xs text-red-500 break-words">{error}</p>
@@ -393,7 +429,7 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
         </p>
 
         <div className="flex gap-2">
-          <Button onClick={handleSubmit} fullWidth disabled={saving || (!isOllamaLocal && (!formData.name || !formData.apiKey)) || (isCompatible && !formData.defaultModel.trim()) || (isAzure && (!azureData.azureEndpoint || !azureData.deployment || !azureData.organization)) || (isCloudflareAi && !cloudflareData.accountId)}>
+          <Button onClick={handleSubmit} fullWidth disabled={saving || isDuplicateKey || (!isOllamaLocal && (!formData.name || !formData.apiKey)) || (isCompatible && !formData.defaultModel.trim()) || (isAzure && (!azureData.azureEndpoint || !azureData.deployment || !azureData.organization)) || (isCloudflareAi && !cloudflareData.accountId)}>
             {saving ? "Saving..." : "Save"}
           </Button>
           <Button onClick={onClose} variant="ghost" fullWidth>
@@ -421,6 +457,7 @@ AddApiKeyModal.propTypes = {
   })),
   error: PropTypes.string,
   existingNames: PropTypes.arrayOf(PropTypes.string),
+  existingApiKeys: PropTypes.arrayOf(PropTypes.string),
   onSave: PropTypes.func.isRequired,
   onBulkDone: PropTypes.func,
   onClose: PropTypes.func.isRequired,

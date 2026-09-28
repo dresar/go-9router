@@ -889,6 +889,14 @@ export default function ProviderDetailPage() {
       }
 
       if (res.ok) {
+        const createdConn = data?.connection;
+        if (createdConn?.id) {
+          try {
+            await fetch(`/api/providers/${createdConn.id}/test`, { method: "POST" });
+          } catch {
+            // Live probe triggered
+          }
+        }
         await fetchConnections();
         setShowAddApiKeyModal(false);
         return;
@@ -1923,6 +1931,7 @@ export default function ProviderDetailPage() {
         proxyPools={proxyPools}
         error={addConnectionError}
         existingNames={connections.map((c) => c.name).filter(Boolean)}
+        existingApiKeys={connections.map((c) => c.apiKey).filter(Boolean)}
         onSave={handleSaveApiKey}
         onBulkDone={fetchConnections}
         onClose={() => {

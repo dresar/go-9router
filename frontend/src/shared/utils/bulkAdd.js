@@ -60,10 +60,13 @@ function parseLine(line, opts = {}) {
  * @returns {{name: string, apiKey: string, skipped: boolean, providerSpecificData?: object}[]}
  */
 export function planBulkAdd(lines, existingNames, opts = {}) {
-  const { isCloudflareAi = false } = opts;
+  const { isCloudflareAi = false, existingKeys = [] } = opts;
 
   const safeExisting = Array.isArray(existingNames) ? existingNames : [];
   const used = new Set(safeExisting.map((n) => (typeof n === "string" ? n.toLowerCase() : "")));
+
+  const safeExistingKeys = Array.isArray(existingKeys) ? existingKeys : [];
+  const usedKeys = new Set(safeExistingKeys.map((k) => (typeof k === "string" ? k.trim() : "")).filter(Boolean));
 
   const out = [];
   for (const raw of lines) {
@@ -73,10 +76,16 @@ export function planBulkAdd(lines, existingNames, opts = {}) {
     const parsed = parseLine(line, { isCloudflareAi });
     if (!parsed || !parsed.apiKey) continue;
 
+    const trimmedKey = parsed.apiKey.trim();
+    if (usedKeys.has(trimmedKey)) {
+      out.push({ name: parsed.baseName, apiKey: trimmedKey, skipped: true, reason: "duplicate" });
+      continue;
+    }
+    usedKeys.add(trimmedKey);
+
     const base = parsed.baseName;
 
     // Gap-fill from 1: smallest free "<base> <n>" not in `used`.
-    // O(batch * existing) — fine for bulk add (tens to low hundreds of keys).
     let idx = 1;
     let name;
     for (;;) {

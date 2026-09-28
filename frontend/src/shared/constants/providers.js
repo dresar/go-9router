@@ -109,6 +109,21 @@ export const PAID_PROVIDERS = new Set([
   "recraft",
   "youcom",
   "fish-audio",
+
+  // Deleted / disabled providers requested by user
+  "ollama",
+  "ollama-local",
+  "ollama-search",
+  "vertex",
+  "vertex-partner",
+  "kimchi",
+  "qoder",
+  "qoder-cn",
+  "codebuddy-cn",
+  "codebuddy-intl",
+  "xiaomi-mimo",
+  "mimo-free",
+  "xiaomi-tokenplan",
 ]);
 
 const byCategory = (cat) => Object.fromEntries(

@@ -49,7 +49,7 @@ func (h *Handler) HandleProviderByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if id == "validate" {
-		h.JSON(w, http.StatusOK, map[string]any{"valid": true})
+		h.HandleProviderValidate(w, r)
 		return
 	}
 
@@ -447,6 +447,16 @@ func testSingleConnection(db *sql.DB, conn *repos.Connection) (valid bool, errSt
 				baseURL = "https://api.mistral.ai/v1"
 			case "geraikita":
 				baseURL = "https://ai.geraikita.com/v1/claude"
+			case "agnes":
+				baseURL = "https://apihub.agnes-ai.com/v1"
+			case "bazaarlink":
+				baseURL = "https://bazaarlink.ai/api/v1"
+			case "poolside":
+				baseURL = "https://inference.poolside.ai/v1"
+			case "api-airforce":
+				baseURL = "https://api.airforce/v1"
+			case "kilo-gateway":
+				baseURL = "https://api.kilo.ai/api/gateway"
 			}
 		}
 		if baseURL != "" {
@@ -682,6 +692,18 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 		name, _ = body["displayName"].(string)
 	}
 	apiKey, _ := body["apiKey"].(string)
+	apiKey = strings.TrimSpace(apiKey)
+	if apiKey != "" {
+		existingConns, err := repos.ListConnections(h.DB, repos.ConnectionFilter{Provider: &provider})
+		if err == nil {
+			for _, ec := range existingConns {
+				if strings.TrimSpace(ec.APIKey) == apiKey {
+					h.JSONError(w, http.StatusConflict, "Kunci API ini sudah terdaftar (duplikat)")
+					return
+				}
+			}
+		}
+	}
 
 	psd := map[string]any{}
 	if v, ok := body["providerSpecificData"].(map[string]any); ok {
@@ -700,11 +722,24 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 		Priority:             1,
 		ProviderSpecificData: psd,
 	}
+
+	valid, errStr, _ := testSingleConnection(h.DB, &conn)
+	if valid {
+		conn.TestStatus = "active"
+		conn.LastError = ""
+	} else if errStr != "" {
+		conn.TestStatus = "error"
+		conn.LastError = errStr
+	} else {
+		conn.TestStatus = "active"
+	}
+
 	created, err := repos.CreateConnection(h.DB, conn)
 	if err != nil {
 		h.JSONError(w, http.StatusInternalServerError, "failed to create provider")
 		return
 	}
+	providers.InvalidateConnectionCache()
 	h.JSON(w, http.StatusCreated, map[string]any{"connection": safeConnection(*created)})
 }
 
@@ -713,6 +748,24 @@ func (h *Handler) updateProvider(w http.ResponseWriter, r *http.Request, id stri
 	if err := h.DecodeJSON(r, &body); err != nil {
 		h.JSONError(w, http.StatusBadRequest, "invalid JSON")
 		return
+	}
+	if rawKey, ok := body["apiKey"].(string); ok {
+		key := strings.TrimSpace(rawKey)
+		if key != "" {
+			current, _ := repos.GetConnection(h.DB, id)
+			if current != nil {
+				p := current.Provider
+				existingConns, err := repos.ListConnections(h.DB, repos.ConnectionFilter{Provider: &p})
+				if err == nil {
+					for _, ec := range existingConns {
+						if ec.ID != id && strings.TrimSpace(ec.APIKey) == key {
+							h.JSONError(w, http.StatusConflict, "Kunci API ini sudah terdaftar (duplikat)")
+							return
+						}
+					}
+				}
+			}
+		}
 	}
 	updated, err := repos.UpdateConnection(h.DB, id, body)
 	if err != nil {
@@ -723,6 +776,7 @@ func (h *Handler) updateProvider(w http.ResponseWriter, r *http.Request, id stri
 		h.JSONError(w, http.StatusNotFound, "not found")
 		return
 	}
+	providers.InvalidateConnectionCache()
 	h.JSON(w, http.StatusOK, map[string]any{"connection": safeConnection(*updated)})
 }
 
@@ -731,7 +785,60 @@ func (h *Handler) deleteProvider(w http.ResponseWriter, r *http.Request, id stri
 		h.JSONError(w, http.StatusInternalServerError, "failed to delete provider")
 		return
 	}
+	providers.InvalidateConnectionCache()
 	h.JSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+func (h *Handler) HandleProviderValidate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var body struct {
+		Provider string `json:"provider"`
+		APIKey   string `json:"apiKey"`
+	}
+	if err := h.DecodeJSON(r, &body); err != nil {
+		h.JSONError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	p := strings.TrimSpace(body.Provider)
+	key := strings.TrimSpace(body.APIKey)
+
+	if p != "" && key != "" {
+		existingConns, err := repos.ListConnections(h.DB, repos.ConnectionFilter{Provider: &p})
+		if err == nil {
+			for _, ec := range existingConns {
+				if strings.TrimSpace(ec.APIKey) == key {
+					h.JSON(w, http.StatusOK, map[string]any{
+						"valid":     false,
+						"error":     "Kunci API ini sudah terdaftar (duplikat)",
+						"duplicate": true,
+					})
+					return
+				}
+			}
+		}
+	}
+
+	tempConn := &repos.Connection{
+		Provider:   p,
+		APIKey:     key,
+		TestStatus: "unknown",
+	}
+	valid, errStr, _ := testSingleConnection(h.DB, tempConn)
+	if !valid && errStr != "" {
+		h.JSON(w, http.StatusOK, map[string]any{
+			"valid": false,
+			"error": errStr,
+		})
+		return
+	}
+
+	h.JSON(w, http.StatusOK, map[string]any{
+		"valid": valid,
+		"error": nil,
+	})
 }
 
 func safeConnection(c repos.Connection) map[string]any {
@@ -756,6 +863,7 @@ func safeConnection(c repos.Connection) map[string]any {
 		"lastErrorAt": c.LastErrorAt,
 		"lastUsedAt":  c.LastUsedAt,
 		"proxyPoolId": c.ProxyPoolID,
+		"apiKey":      c.APIKey,
 	}
 	if c.ProviderSpecificData != nil {
 		psd := map[string]any{}
