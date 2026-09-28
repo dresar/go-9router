@@ -355,6 +355,8 @@ func normalizeProviderAlias(alias string) string {
 		return "cerebras"
 	case "ch":
 		return "chutes"
+	case "gk":
+		return "geraikita"
 	default:
 		return alias
 	}
@@ -445,6 +447,9 @@ func ResolveModelProvider(modelStr string, db *sql.DB) (provider, model string, 
 	}
 	if strings.HasPrefix(lower, "bynara") || strings.HasPrefix(lower, "nry-") {
 		return "bynara", modelStr, true
+	}
+	if strings.HasPrefix(lower, "geraikita") || strings.HasPrefix(lower, "gk/") {
+		return "geraikita", modelStr, true
 	}
 
 	return "", modelStr, false

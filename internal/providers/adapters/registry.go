@@ -35,8 +35,8 @@ func (g *GenericAPIKey) BuildRequest(ctx context.Context, body map[string]any, c
 	}
 	targetURL := g.baseURL
 	if !strings.Contains(targetURL, "/chat/completions") {
-		if strings.HasSuffix(targetURL, "/v1") {
-			targetURL += "/chat/completions"
+		if strings.Contains(targetURL, "/v1") {
+			targetURL = strings.TrimRight(targetURL, "/") + "/chat/completions"
 		} else if strings.HasSuffix(targetURL, "/") {
 			targetURL += "v1/chat/completions"
 		} else {
@@ -205,6 +205,7 @@ var KnownProviders = map[string]providers.ProviderAdapter{
 	"morph":            NewGenericAPIKey("morph", "https://api.morph.so", "Bearer"),
 	"xiaomi-tokenplan": NewGenericAPIKey("xiaomi-tokenplan", "https://api.xiaomi.com", "Bearer"),
 	"bynara":           NewGenericAPIKey("bynara", "https://router.bynara.id/v1", "Bearer"),
+	"geraikita":         NewGenericAPIKey("geraikita", "https://ai.geraikita.com/v1/claude", "Bearer"),
 }
 
 func GetAdapter(providerID string) (providers.ProviderAdapter, bool) {

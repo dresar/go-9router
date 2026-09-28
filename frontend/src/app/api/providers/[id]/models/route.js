@@ -243,6 +243,8 @@ const PROVIDER_MODELS_CONFIG = {
   },
   openai: createOpenAIModelsConfig("https://api.openai.com/v1/models"),
   openrouter: createOpenAIModelsConfig("https://openrouter.ai/api/v1/models"),
+  geraikita: createOpenAIModelsConfig("https://ai.geraikita.com/v1/claude/models"),
+  bynara: createOpenAIModelsConfig("https://router.bynara.id/v1/models"),
   anthropic: {
     url: "https://api.anthropic.com/v1/models",
     method: "GET",

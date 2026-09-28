@@ -34,6 +34,7 @@ const PROVIDER_NAMES = {
   cerebras: "Cerebras AI",
   sambanova: "SambaNova",
   siliconflow: "SiliconFlow",
+  geraikita: "GeraiKita",
 };
 
 // Provider Presets for Chat Models (Curated free-tier and popular models)
@@ -73,6 +74,19 @@ const DEFAULT_PROVIDER_MODELS = {
     { id: "bynara/deepseek-v4-flash-alibaba", name: "DeepSeek V4 Flash", subtitle: "Bynara router accelerated" },
     { id: "bynara/claude-sonnet-5", name: "Claude Sonnet 5", subtitle: "Flagship intelligence" },
     { id: "bynara/agnes-2.5-flash", name: "Agnes 2.5 Flash", subtitle: "Multimodal via Bynara" },
+  ],
+  geraikita: [
+    { id: "geraikita/claude-haiku-4.5", name: "Claude Haiku 4.5", subtitle: "1M context (Recommended)" },
+    { id: "geraikita/gpt-5.6-sol", name: "GPT 5.6 Sol", subtitle: "1M context (Recommended)" },
+    { id: "geraikita/gpt-5.6-terra", name: "GPT 5.6 Terra", subtitle: "1M context (Smooth)" },
+    { id: "geraikita/gpt-5.6-luna", name: "GPT 5.6 Luna", subtitle: "1M context (Smooth)" },
+    { id: "geraikita/glm-4.7-flash", name: "GLM 4.7 Flash", subtitle: "Fast & lightweight" },
+    { id: "geraikita/glm-5", name: "GLM 5", subtitle: "Frontier model" },
+    { id: "geraikita/glm-4.7", name: "GLM 4.7", subtitle: "Versatile model" },
+    { id: "geraikita/kimi-k2.5", name: "Kimi K2.5", subtitle: "Agentic model" },
+    { id: "geraikita/minimax-m2.5", name: "MiniMax M2.5", subtitle: "Reasoning model" },
+    { id: "geraikita/minimax-m2.1", name: "MiniMax M2.1", subtitle: "Reasoning model" },
+    { id: "geraikita/deepseek-v3.2", name: "DeepSeek V3.2", subtitle: "Versatile model" },
   ],
   kiro: [
     { id: "kiro/claude-3-7-sonnet", name: "Claude 3.7 Sonnet (Kiro)", subtitle: "Via Kiro proxy" },

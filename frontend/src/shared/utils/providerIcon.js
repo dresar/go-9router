@@ -26,7 +26,7 @@ export function resolveProviderIconId(providerId) {
   return aliased;
 }
 
-const SVG_ICON_PROVIDERS = new Set(["bynara", "codewhale", "pi", "smelt", "kimchi"]);
+const SVG_ICON_PROVIDERS = new Set(["bynara", "codewhale", "pi", "smelt", "kimchi", "geraikita"]);
 
 /** `/providers/{id}.png` or `/providers/{id}.svg` or null when previously failed. */
 export function getProviderIconSrc(providerId) {

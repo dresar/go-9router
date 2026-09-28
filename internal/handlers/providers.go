@@ -451,8 +451,8 @@ func testSingleConnection(db *sql.DB, conn *repos.Connection) (valid bool, errSt
 				baseURL = "https://api.together.xyz/v1"
 			case "mistral":
 				baseURL = "https://api.mistral.ai/v1"
-			case "agnes":
-				baseURL = "https://apihub.agnes-ai.com/v1"
+			case "geraikita":
+				baseURL = "https://ai.geraikita.com/v1/claude"
 			}
 		}
 		if baseURL != "" {
