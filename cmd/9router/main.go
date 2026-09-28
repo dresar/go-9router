@@ -19,6 +19,7 @@ import (
 	"github.com/dresar/go-9router/internal/router"
 	"github.com/dresar/go-9router/internal/server"
 	"github.com/dresar/go-9router/internal/storage"
+	"github.com/dresar/go-9router/internal/updater"
 )
 
 const version = "0.5.91"
@@ -154,6 +155,9 @@ Options:
 			log.Fatalf("server error: %v", err)
 		}
 	}()
+
+	// Start background 1-hour periodic GitHub sync check
+	updater.GetManager().StartScheduler(1 * time.Hour)
 
 	// Auto open browser
 	if !dontOpenBrowser {

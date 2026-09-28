@@ -16,6 +16,8 @@ func New(h *handlers.Handler, jwtSecret string) http.Handler {
 
 	mux.HandleFunc("/api/health", h.HandleHealth)
 	mux.HandleFunc("/api/version", h.HandleVersion)
+	mux.HandleFunc("/api/version/check", h.HandleVersionCheck)
+	mux.HandleFunc("/api/version/sync", h.HandleVersionSync)
 	mux.HandleFunc("/api/version/shutdown", h.HandleShutdown)
 	mux.HandleFunc("/api/version/update", h.HandleVersionActions)
 	mux.HandleFunc("/api/init", h.HandleInit)

@@ -13,6 +13,7 @@ import { OAUTH_PROVIDERS, APIKEY_PROVIDERS } from "@/shared/constants/config";
 import { MEDIA_PROVIDER_KINDS, AI_PROVIDERS } from "@/shared/constants/providers";
 import { getProviderIconSrc } from "@/shared/utils/providerIcon";
 import { translate } from "@/i18n/runtime";
+import { useGitHubUpdateStore } from "@/store/useGitHubUpdateStore";
 
 const getPageInfo = (pathname) => {
   if (!pathname) return { title: "", description: "", breadcrumbs: [] };
@@ -182,6 +183,8 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
   const pathname = usePathname();
   const [displayName, setDisplayName] = useState("");
   const [loginMethod, setLoginMethod] = useState("");
+  const updateInfo = useGitHubUpdateStore((s) => s.updateInfo);
+  const setUpdateModalOpen = useGitHubUpdateStore((s) => s.setModalOpen);
 
   // Memoize page info to prevent unnecessary recalculations
   const pageInfo = useMemo(() => getPageInfo(pathname), [pathname]);
@@ -312,6 +315,18 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
               {loginMethod}
             </span>
           </div>
+        )}
+        {updateInfo?.hasUpdate && (
+          <button
+            type="button"
+            onClick={() => setUpdateModalOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-500 hover:bg-amber-500/20 text-xs font-medium transition-all cursor-pointer mr-0.5"
+            title={`Update GitHub (${updateInfo.latestCommit}): ${updateInfo.latestCommitMsg}`}
+          >
+            <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
+            <span className="hidden sm:inline">Update GitHub</span>
+            <span className="material-symbols-outlined text-[15px]">notifications_active</span>
+          </button>
         )}
         <HeaderSearch />
         <ThemeToggle />

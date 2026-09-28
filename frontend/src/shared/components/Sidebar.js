@@ -9,8 +9,10 @@ import { APP_CONFIG, UPDATER_CONFIG } from "@/shared/constants/config";
 import { MEDIA_PROVIDER_KINDS } from "@/shared/constants/providers";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import useSettingsStore from "@/store/settingsStore";
+import { useGitHubUpdateStore } from "@/store/useGitHubUpdateStore";
 import Button from "./Button";
 import { ConfirmModal } from "./Modal";
+import GitHubUpdateModal from "./GitHubUpdateModal";
 
 // const VISIBLE_MEDIA_KINDS = ["embedding", "image", "imageToText", "tts", "stt", "webSearch", "webFetch", "video", "music"];
 const VISIBLE_MEDIA_KINDS = ["embedding", "image", "video", "tts", "stt", "systemone"];
@@ -43,12 +45,21 @@ export default function Sidebar({ onClose }) {
   const pathname = usePathname();
   const [mediaOpen, setMediaOpen] = useState(false);
   const [isDisconnected, setIsDisconnected] = useState(false);
-  const [updateInfo, setUpdateInfo] = useState(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [shutdownCountdown, setShutdownCountdown] = useState(0);
   const [enableTranslator, setEnableTranslator] = useState(false);
   const { copied, copy } = useCopyToClipboard(2000);
+
+  const {
+    updateInfo,
+    loading: checkingUpdate,
+    syncing: syncingUpdate,
+    fetchStatus: fetchUpdateStatus,
+    checkNow: checkUpdateNow,
+    syncNow: syncUpdateNow,
+    setModalOpen: setUpdateModalOpen,
+  } = useGitHubUpdateStore();
 
   const INSTALL_CMD = UPDATER_CONFIG.installCmdLatest;
 
@@ -58,16 +69,14 @@ export default function Sidebar({ onClose }) {
     });
   }, []);
 
-  // Lazy check for new npm version in background after initial render
+  // Check GitHub update on mount and every 1 hour
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetch("/api/version")
-        .then(res => res.json())
-        .then(data => { if (data.hasUpdate) setUpdateInfo(data); })
-        .catch(() => {});
-    }, 2500);
-    return () => clearTimeout(timer);
-  }, []);
+    fetchUpdateStatus();
+    const interval = setInterval(() => {
+      fetchUpdateStatus();
+    }, 3600000);
+    return () => clearInterval(interval);
+  }, [fetchUpdateStatus]);
 
   const isActive = (href) => {
     if (href === "/endpoint") {
@@ -124,35 +133,76 @@ export default function Sidebar({ onClose }) {
             <div className="flex items-center justify-center size-9 rounded-[10px] bg-gradient-to-br from-brand-500 to-brand-700 shadow-[var(--shadow-warm)]">
               <span className="material-symbols-outlined text-white text-[20px]">hub</span>
             </div>
-            <div className="flex flex-col">
-              <h1 className="text-lg font-semibold tracking-tight text-text-main">
+            <div className="flex flex-col min-w-0">
+              <h1 className="text-lg font-semibold tracking-tight text-text-main truncate">
                 {APP_CONFIG.name}
               </h1>
-              <span className="text-xs text-text-muted">v{APP_CONFIG.version}</span>
+              <div className="flex items-center gap-1.5 text-xs text-text-muted">
+                <span>v{APP_CONFIG.version}</span>
+                {updateInfo?.currentCommit && (
+                  <span className="font-mono text-[10px] opacity-75">({updateInfo.currentCommit})</span>
+                )}
+              </div>
             </div>
           </Link>
-          {updateInfo && (
-            <div className="flex flex-col gap-1.5 rounded p-1 -m-1">
-              <span className="text-xs font-semibold text-green-600 dark:text-amber-500">
-                ↑ New version available: v{updateInfo.latestVersion}
-              </span>
-              <div className="flex items-center gap-2">
+
+          {/* GitHub Update Status Card */}
+          {updateInfo?.hasUpdate ? (
+            <div className="flex flex-col gap-2 p-2.5 rounded-lg border border-amber-500/35 bg-amber-500/10 text-xs mt-1">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 font-semibold text-amber-500">
+                  <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
+                  Update GitHub Tersedia
+                </span>
+                <span className="font-mono text-[10px] text-amber-500/90 font-medium">
+                  {updateInfo.latestCommit}
+                </span>
+              </div>
+              {updateInfo.latestCommitMsg && (
+                <p className="text-[11px] text-text-muted line-clamp-2 leading-relaxed">
+                  {updateInfo.latestCommitMsg}
+                </p>
+              )}
+              <div className="flex items-center gap-1.5 pt-0.5">
                 <button
-                  onClick={() => setShowUpdateModal(true)}
-                  className="px-2 py-1 rounded bg-green-600 hover:bg-green-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white text-[11px] font-semibold transition-colors cursor-pointer"
+                  type="button"
+                  onClick={() => syncUpdateNow()}
+                  disabled={syncingUpdate || checkingUpdate}
+                  className="flex-1 flex items-center justify-center gap-1 h-7 rounded-md bg-amber-500 hover:bg-amber-600 text-black text-xs font-medium transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                  title="Terapkan git pull origin master"
                 >
-                  Update now
+                  <span className={`material-symbols-outlined text-[14px] ${syncingUpdate ? "animate-spin" : ""}`}>
+                    {syncingUpdate ? "sync" : "download"}
+                  </span>
+                  <span>{syncingUpdate ? "Syncing..." : "Sync Sekarang"}</span>
                 </button>
                 <button
-                  onClick={() => copy(INSTALL_CMD)}
-                  title="Copy install command"
-                  className="flex-1 text-left hover:opacity-80 transition-opacity cursor-pointer min-w-0"
+                  type="button"
+                  onClick={() => setUpdateModalOpen(true)}
+                  className="size-7 flex items-center justify-center rounded-md border border-border hover:bg-surface-hover text-text-muted transition-colors cursor-pointer"
+                  title="Lihat Detail Update"
                 >
-                  <code className="block text-[10px] text-green-600/80 dark:text-amber-400/70 font-mono truncate">
-                    {copied ? "✓ copied!" : INSTALL_CMD}
-                  </code>
+                  <span className="material-symbols-outlined text-[14px]">info</span>
                 </button>
               </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between px-1 py-0.5 text-[11px] text-text-muted mt-0.5">
+              <span className="flex items-center gap-1.5">
+                <span className="size-1.5 rounded-full bg-emerald-500" />
+                <span>GitHub Up-to-date</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => checkUpdateNow()}
+                disabled={checkingUpdate}
+                className="p-1 rounded hover:bg-surface-hover text-text-muted hover:text-text-main transition-colors cursor-pointer"
+                title="Cek update GitHub sekarang (Otomatis tiap 1 jam)"
+              >
+                <span className={`material-symbols-outlined text-[13px] ${checkingUpdate ? "animate-spin text-primary" : ""}`}>
+                  sync
+                </span>
+              </button>
             </div>
           )}
         </div>
@@ -365,6 +415,8 @@ export default function Sidebar({ onClose }) {
           )}
         </div>
       )}
+
+      <GitHubUpdateModal />
     </>
   );
 }
