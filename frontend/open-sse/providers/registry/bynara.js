@@ -27,6 +27,7 @@ export default {
     },
   },
   models: [
+    { id: "combo/free", name: "Bynara Free Combo", reasoning: true, vision: true },
     { id: "space-bunny-alpha-bynara", name: "Space Bunny Alpha byNara", reasoning: true, vision: true },
     { id: "agnes-2.5-flash", name: "Agnes 2.5 Flash", reasoning: true, vision: true },
     { id: "agnes-3-flash", name: "Agnes 3 Flash", reasoning: true, vision: true },
