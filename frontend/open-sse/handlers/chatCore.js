@@ -286,17 +286,8 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
   if (rtkStats?.hits?.length) xf.push(`RTK:${rtkStats.hits.length}`);
 
-  // Caveman: inject terse-style system prompt
-  if (tokenSaverEnabled && cavemanEnabled && cavemanLevel) {
-    injectCaveman(translatedBody, finalFormat, cavemanLevel);
-    xf.push(`CAVEMAN:${cavemanLevel}`);
-  }
-
-  // Ponytail: inject lazy-senior-dev system prompt
-  if (tokenSaverEnabled && ponytailEnabled && ponytailLevel) {
-    injectPonytail(translatedBody, finalFormat, ponytailLevel);
-    xf.push(`PONYTAIL:${ponytailLevel}`);
-  }
+  // Prompt injection disabled: requests forwarded without backend prompt alteration
+  // to ensure maximum speed and normal tool execution
 
   // PXPIPE: image bulky context (Claude-format bodies only), last saver before dispatch
   let pxpipeSummary = null;

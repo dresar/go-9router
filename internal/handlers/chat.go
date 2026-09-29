@@ -17,7 +17,6 @@ import (
 	"github.com/dresar/go-9router/internal/providers/adapters"
 	"github.com/dresar/go-9router/internal/storage/repos"
 	"github.com/dresar/go-9router/internal/stream"
-	"github.com/dresar/go-9router/internal/tokensaver"
 )
 
 func (h *Handler) HandleChat(w http.ResponseWriter, r *http.Request) {
@@ -37,12 +36,6 @@ func (h *Handler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	settings, _ := repos.GetSettings(h.DB)
-	isPlayground := strings.ToLower(r.Header.Get("x-playground")) == "true" ||
-		strings.Contains(r.Header.Get("Referer"), "/playground") ||
-		strings.ToLower(r.Header.Get("x-9router-token-saver")) == "off"
-	if !isPlayground {
-		tokensaver.ApplyTokenSaver(body, settings)
-	}
 
 	requireKey := repos.SettingBool(settings, "requireApiKey", h.Cfg.RequireAPIKey)
 	if requireKey {
@@ -309,7 +302,7 @@ func (h *Handler) trySingleChatWithFallback(r *http.Request, body map[string]any
 			break
 		}
 
-		ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		req, err := adapter.BuildRequest(ctx, body, sel.Credentials)
 		if err != nil {
 			cancel()
