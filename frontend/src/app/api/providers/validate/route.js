@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getProviderNodeById } from "@/models";
+import { getProviderNodeById, getProviderConnections } from "@/models";
 import { isOpenAICompatibleProvider, isAnthropicCompatibleProvider, isCustomEmbeddingProvider, AI_PROVIDERS } from "@/shared/constants/providers";
 import { getDefaultModel } from "open-sse/config/providerModels.js";
 import { resolveOllamaLocalHost, resolveXiaomiTokenplanBaseUrl, PROVIDERS } from "open-sse/config/providers.js";
@@ -86,11 +86,26 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const provider = normalizeProviderId(body.provider);
-    const { apiKey, providerSpecificData } = body;
+    const { apiKey, connectionId, providerSpecificData } = body;
 
     const isNoAuth = AI_PROVIDERS[provider]?.noAuth === true;
     if (!provider || (!apiKey && provider !== "ollama-local" && !isNoAuth)) {
       return NextResponse.json({ error: "Provider and API key required" }, { status: 400 });
+    }
+
+    if (apiKey && typeof apiKey === "string" && apiKey.trim()) {
+      const trimmed = apiKey.trim();
+      const existingConns = await getProviderConnections();
+      const isDup = existingConns.some(
+        (c) => c.provider === provider && c.id !== connectionId && typeof c.apiKey === "string" && c.apiKey.trim() === trimmed
+      );
+      if (isDup) {
+        return NextResponse.json({
+          valid: false,
+          error: "Kunci API ini sudah terdaftar (duplikat)",
+          duplicate: true,
+        });
+      }
     }
 
     let isValid = false;

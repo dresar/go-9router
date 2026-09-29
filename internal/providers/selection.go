@@ -357,6 +357,10 @@ func normalizeProviderAlias(alias string) string {
 		return "chutes"
 	case "gk":
 		return "geraikita"
+	case "af", "airforce":
+		return "api-airforce"
+	case "kgw", "kilogateway":
+		return "kilo-gateway"
 	default:
 		return alias
 	}

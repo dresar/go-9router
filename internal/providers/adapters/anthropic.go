@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/dresar/go-9router/internal/providers"
 )
@@ -27,7 +28,17 @@ func (Anthropic) BuildRequest(ctx context.Context, body map[string]any, creds *p
 		apiKey = creds.AccessToken
 	}
 
-	req, err := providers.NewJSONRequest(ctx, http.MethodPost, baseURL+"/v1/messages", body, map[string]string{
+	baseURL = strings.TrimRight(baseURL, "/")
+	targetURL := baseURL
+	if !strings.Contains(targetURL, "/messages") {
+		if strings.HasSuffix(targetURL, "/v1") {
+			targetURL += "/messages"
+		} else {
+			targetURL += "/v1/messages"
+		}
+	}
+
+	req, err := providers.NewJSONRequest(ctx, http.MethodPost, targetURL, body, map[string]string{
 		"x-api-key":         apiKey,
 		"anthropic-version": "2023-06-01",
 	})

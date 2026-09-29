@@ -69,7 +69,7 @@ export async function GET() {
       return {
         ...c,
         name,
-        apiKey: undefined,
+        apiKey: c.apiKey,
         accessToken: undefined,
         refreshToken: undefined,
         idToken: undefined,
@@ -122,6 +122,17 @@ export async function POST(request) {
     const connectionName = name || displayName || AI_PROVIDERS[provider]?.name;
     if (!connectionName) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    }
+
+    if (apiKey && typeof apiKey === "string" && apiKey.trim()) {
+      const trimmed = apiKey.trim();
+      const existingConns = await getProviderConnections();
+      const isDup = existingConns.some(
+        (c) => c.provider === provider && typeof c.apiKey === "string" && c.apiKey.trim() === trimmed
+      );
+      if (isDup) {
+        return NextResponse.json({ error: "Kunci API ini sudah terdaftar (duplikat)", duplicate: true }, { status: 409 });
+      }
     }
 
     let providerSpecificData = normalizeProviderSpecificData(provider, body, body.providerSpecificData);

@@ -50,12 +50,19 @@ function CallbackContent() {
 
     // Method 1: postMessage to opener (popup mode)
     if (window.opener) {
-      for (const origin of expectedOrigins) {
-        try {
-          window.opener.postMessage({ type: "oauth_callback", data: callbackData }, origin);
-          relayed = true;
-        } catch (e) {
-          // ignore
+      try {
+        window.opener.postMessage({ type: "oauth_callback", data: callbackData }, "*");
+        relayed = true;
+      } catch (e) {
+        for (const origin of expectedOrigins) {
+          if (origin === "*") continue;
+          try {
+            window.opener.postMessage({ type: "oauth_callback", data: callbackData }, origin);
+            relayed = true;
+            break;
+          } catch (err) {
+            // ignore
+          }
         }
       }
     }

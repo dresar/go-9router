@@ -180,7 +180,11 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
           const vres = await fetch("/api/providers/validate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ provider, apiKey: entry.apiKey }),
+            body: JSON.stringify({
+              provider,
+              apiKey: entry.apiKey,
+              ...(entry.providerSpecificData ? { providerSpecificData: entry.providerSpecificData } : {}),
+            }),
           });
           const vdata = await vres.json().catch(() => ({}));
           if (vdata.duplicate) {
@@ -244,7 +248,9 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
             />
             {bulkResult && (
               <div className={`text-sm font-medium ${bulkResult.failed > 0 ? "text-yellow-400" : "text-green-400"}`}>
-                ✓ {bulkResult.success} added{bulkResult.failed > 0 ? `, ✗ ${bulkResult.failed} failed` : ""}
+                ✓ {bulkResult.success} added
+                {bulkResult.duplicates > 0 ? `, ⚠ ${bulkResult.duplicates} duplicate` : ""}
+                {bulkResult.failed - bulkResult.duplicates > 0 ? `, ✗ ${bulkResult.failed - bulkResult.duplicates} failed` : ""}
               </div>
             )}
             <div className="flex gap-2">

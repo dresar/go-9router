@@ -260,6 +260,34 @@ func testSingleConnection(db *sql.DB, conn *repos.Connection) (valid bool, errSt
 		}
 		return false, fmt.Sprintf("Authentication probe failed (HTTP %d)", res.Status), refreshed
 
+	case "anthropic":
+		key := conn.APIKey
+		if key == "" {
+			key = conn.AccessToken
+		}
+		if key == "" {
+			return false, "Missing Anthropic API key", false
+		}
+		probeBody := `{"model":"claude-3-haiku-20240307","max_tokens":1,"messages":[{"role":"user","content":"test"}]}`
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.anthropic.com/v1/messages", strings.NewReader(probeBody))
+		if err != nil {
+			return false, err.Error(), false
+		}
+		req.Header.Set("x-api-key", key)
+		req.Header.Set("anthropic-version", "2023-06-01")
+		req.Header.Set("content-type", "application/json")
+		res, err := providers.DoUpstreamWithProxy(ctx, req, db, &providers.Credentials{ProxyPoolID: conn.ProxyPoolID})
+		if err != nil {
+			return false, err.Error(), false
+		}
+		if res.Response != nil && res.Response.Body != nil {
+			res.Response.Body.Close()
+		}
+		if res.Status != 401 && res.Status != 403 {
+			return true, "", false
+		}
+		return false, fmt.Sprintf("Invalid Anthropic API key (HTTP %d)", res.Status), false
+
 	case "github":
 		token := conn.AccessToken
 		if token == "" {
@@ -795,8 +823,11 @@ func (h *Handler) HandleProviderValidate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var body struct {
-		Provider string `json:"provider"`
-		APIKey   string `json:"apiKey"`
+		Provider             string         `json:"provider"`
+		APIKey               string         `json:"apiKey"`
+		ConnectionID         string         `json:"connectionId"`
+		ID                   string         `json:"id"`
+		ProviderSpecificData map[string]any `json:"providerSpecificData"`
 	}
 	if err := h.DecodeJSON(r, &body); err != nil {
 		h.JSONError(w, http.StatusBadRequest, "invalid JSON")
@@ -804,11 +835,18 @@ func (h *Handler) HandleProviderValidate(w http.ResponseWriter, r *http.Request)
 	}
 	p := strings.TrimSpace(body.Provider)
 	key := strings.TrimSpace(body.APIKey)
+	connID := strings.TrimSpace(body.ConnectionID)
+	if connID == "" {
+		connID = strings.TrimSpace(body.ID)
+	}
 
 	if p != "" && key != "" {
 		existingConns, err := repos.ListConnections(h.DB, repos.ConnectionFilter{Provider: &p})
 		if err == nil {
 			for _, ec := range existingConns {
+				if connID != "" && ec.ID == connID {
+					continue
+				}
 				if strings.TrimSpace(ec.APIKey) == key {
 					h.JSON(w, http.StatusOK, map[string]any{
 						"valid":     false,
@@ -822,9 +860,17 @@ func (h *Handler) HandleProviderValidate(w http.ResponseWriter, r *http.Request)
 	}
 
 	tempConn := &repos.Connection{
-		Provider:   p,
-		APIKey:     key,
-		TestStatus: "unknown",
+		ID:                   connID,
+		Provider:             p,
+		APIKey:               key,
+		TestStatus:           "unknown",
+		ProviderSpecificData: body.ProviderSpecificData,
+	}
+	if connID != "" && tempConn.ProviderSpecificData == nil {
+		if existing, _ := repos.GetConnection(h.DB, connID); existing != nil {
+			tempConn.ProxyPoolID = existing.ProxyPoolID
+			tempConn.ProviderSpecificData = existing.ProviderSpecificData
+		}
 	}
 	valid, errStr, _ := testSingleConnection(h.DB, tempConn)
 	if !valid && errStr != "" {

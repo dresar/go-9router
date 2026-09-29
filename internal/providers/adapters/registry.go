@@ -205,7 +205,12 @@ var KnownProviders = map[string]providers.ProviderAdapter{
 	"morph":            NewGenericAPIKey("morph", "https://api.morph.so", "Bearer"),
 	"xiaomi-tokenplan": NewGenericAPIKey("xiaomi-tokenplan", "https://api.xiaomi.com", "Bearer"),
 	"bynara":           NewGenericAPIKey("bynara", "https://router.bynara.id/v1", "Bearer"),
-	"geraikita":         NewGenericAPIKey("geraikita", "https://ai.geraikita.com/v1/claude", "Bearer"),
+	"geraikita":        NewGenericAPIKey("geraikita", "https://ai.geraikita.com/v1/claude", "Bearer"),
+	"agnes":            NewGenericAPIKey("agnes", "https://apihub.agnes-ai.com/v1", "Bearer"),
+	"bazaarlink":       NewGenericAPIKey("bazaarlink", "https://bazaarlink.ai/api/v1", "Bearer"),
+	"poolside":         NewGenericAPIKey("poolside", "https://inference.poolside.ai/v1", "Bearer"),
+	"api-airforce":     NewGenericAPIKey("api-airforce", "https://api.airforce/v1", "Bearer"),
+	"kilo-gateway":     NewGenericAPIKey("kilo-gateway", "https://api.kilo.ai/api/gateway", "Bearer"),
 }
 
 func GetAdapter(providerID string) (providers.ProviderAdapter, bool) {

@@ -28,6 +28,7 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState("");
 
   useEffect(() => {
     if (connection) {
@@ -56,6 +57,7 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
       }
       setTestResult(null);
       setValidationResult(null);
+      setDuplicateWarning("");
     }
   }, [connection]);
 
@@ -92,6 +94,7 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
     if (!connection?.provider || !formData.apiKey) return;
     setValidating(true);
     setValidationResult(null);
+    setDuplicateWarning("");
     try {
       const res = await fetch("/api/providers/validate", {
         method: "POST",
@@ -99,13 +102,19 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
         body: JSON.stringify({
           provider: connection.provider,
           apiKey: formData.apiKey,
+          connectionId: connection.id,
           ...(isAzure ? { providerSpecificData: azureData } : {}),
           ...(isCloudflareAi ? { providerSpecificData: cloudflareData } : {}),
           ...(providerRegions ? { providerSpecificData: buildRegionSpecificData() } : {}),
         }),
       });
       const data = await res.json();
-      setValidationResult(data.valid ? "success" : "failed");
+      if (data.duplicate) {
+        setDuplicateWarning(data.error || "Kunci API ini sudah terdaftar (duplikat)");
+        setValidationResult("duplicate");
+      } else {
+        setValidationResult(data.valid ? "success" : "failed");
+      }
     } catch {
       setValidationResult("failed");
     } finally {
@@ -128,18 +137,25 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
           try {
             setValidating(true);
             setValidationResult(null);
+            setDuplicateWarning("");
             const res = await fetch("/api/providers/validate", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 provider: connection.provider,
                 apiKey: formData.apiKey,
+                connectionId: connection.id,
                 ...(isAzure ? { providerSpecificData: azureData } : {}),
                 ...(isCloudflareAi ? { providerSpecificData: cloudflareData } : {}),
                 ...(providerRegions ? { providerSpecificData: buildRegionSpecificData() } : {}),
               }),
             });
             const data = await res.json();
+            if (data.duplicate) {
+              setDuplicateWarning(data.error || "Kunci API ini sudah terdaftar (duplikat)");
+              setValidationResult("duplicate");
+              return;
+            }
             isValid = !!data.valid;
             setValidationResult(isValid ? "success" : "failed");
           } catch {
@@ -209,7 +225,10 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
                 label="API Key"
                 type="password"
                 value={formData.apiKey}
-                onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+                onChange={(e) => {
+                  setFormData({ ...formData, apiKey: e.target.value });
+                  setDuplicateWarning("");
+                }}
                 placeholder="Enter new API key"
                 hint="Leave blank to keep the current API key."
                 className="flex-1"
@@ -220,7 +239,13 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
                 </Button>
               </div>
             </div>
-            {validationResult && (
+            {duplicateWarning && (
+              <div className="flex items-center gap-1.5 text-xs text-red-500 font-medium">
+                <span className="material-symbols-outlined text-[14px]">warning</span>
+                <span>{duplicateWarning}</span>
+              </div>
+            )}
+            {validationResult && validationResult !== "duplicate" && (
               <Badge variant={validationResult === "success" ? "success" : "error"}>
                 {validationResult === "success" ? "Valid" : "Invalid"}
               </Badge>
