@@ -13,7 +13,7 @@ func (h *Handler) HandleModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	conns, _ := repos.ListConnections(h.DB, repos.ConnectionFilter{})
-	models := buildModelList(conns)
+	models := h.buildModelList(conns)
 	h.JSON(w, http.StatusOK, map[string]any{"data": models, "object": "list"})
 }
 
@@ -97,13 +97,62 @@ func (h *Handler) HandleV1Models(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	conns, _ := repos.ListConnections(h.DB, repos.ConnectionFilter{})
-	models := buildModelList(conns)
+	models := h.buildModelList(conns)
 	h.JSON(w, http.StatusOK, map[string]any{"data": models, "object": "list"})
 }
 
-func buildModelList(conns []repos.Connection) []map[string]any {
+func (h *Handler) buildModelList(conns []repos.Connection) []map[string]any {
 	seen := map[string]bool{}
 	var out []map[string]any
+
+	// 1. Add Combos
+	if combos, err := repos.ListCombos(h.DB); err == nil {
+		for _, c := range combos {
+			if !seen[c.Name] {
+				seen[c.Name] = true
+				out = append(out, map[string]any{
+					"id":             c.Name,
+					"object":         "model",
+					"owned_by":       "combo",
+					"context_length": 1000000,
+					"context_window": 1000000,
+				})
+			}
+			comboPrefixed := "combo:" + c.Name
+			if !seen[comboPrefixed] {
+				seen[comboPrefixed] = true
+				out = append(out, map[string]any{
+					"id":             comboPrefixed,
+					"object":         "model",
+					"owned_by":       "combo",
+					"context_length": 1000000,
+					"context_window": 1000000,
+				})
+			}
+		}
+	}
+
+	// 2. Add Custom Models
+	if items, err := repos.KVListSlice(h.DB, "customModels"); err == nil {
+		for _, it := range items {
+			if m, ok := it.(map[string]any); ok {
+				if id, ok := m["id"].(string); ok && id != "" && !seen[id] {
+					seen[id] = true
+					ownedBy := "custom"
+					if p, ok := m["providerAlias"].(string); ok && p != "" {
+						ownedBy = p
+					}
+					out = append(out, map[string]any{
+						"id":       id,
+						"object":   "model",
+						"owned_by": ownedBy,
+					})
+				}
+			}
+		}
+	}
+
+	// 3. Add Provider default models
 	for _, c := range conns {
 		if !c.IsActive {
 			continue

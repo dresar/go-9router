@@ -44,7 +44,7 @@ func GetComboByID(db *sql.DB, id string) (*Combo, error) {
 }
 
 func GetComboByName(db *sql.DB, name string) (*Combo, error) {
-	return getCombo(db, `SELECT id, name, kind, models, createdAt, updatedAt FROM combos WHERE name = ?`, name)
+	return getCombo(db, `SELECT id, name, kind, models, createdAt, updatedAt FROM combos WHERE name = ? COLLATE NOCASE`, name)
 }
 
 func getCombo(db *sql.DB, q, arg string) (*Combo, error) {

@@ -10,10 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -49,12 +47,7 @@ func EnsureNextServer() {
 	cmd := exec.Command(nodeBin, filepath.Base(serverFile))
 	cmd.Dir = absStandaloneDir
 	cmd.Env = append(os.Environ(), "PORT=20127", "HOSTNAME=0.0.0.0", "NODE_ENV=production", "DATA_DIR="+absDataDir)
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow:    true,
-			CreationFlags: 0x08000000,
-		}
-	}
+	setSysProcAttr(cmd)
 
 	if err := cmd.Start(); err == nil {
 		nextServerCmd = cmd

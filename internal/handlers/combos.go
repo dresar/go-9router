@@ -30,9 +30,6 @@ func (h *Handler) HandleCombos(w http.ResponseWriter, r *http.Request) {
 			h.JSONError(w, http.StatusBadRequest, "name is required")
 			return
 		}
-		if len(body.Models) > 3 {
-			body.Models = body.Models[:3]
-		}
 		created, err := repos.CreateCombo(h.DB, body)
 		if err != nil {
 			h.JSONError(w, http.StatusInternalServerError, "failed to create combo")
@@ -74,9 +71,6 @@ func (h *Handler) HandleComboByID(w http.ResponseWriter, r *http.Request) {
 				if s, ok := m.(string); ok {
 					strs = append(strs, s)
 				}
-			}
-			if len(strs) > 3 {
-				strs = strs[:3]
 			}
 			body["models"] = strs
 		}

@@ -211,6 +211,8 @@ var KnownProviders = map[string]providers.ProviderAdapter{
 	"poolside":         NewGenericAPIKey("poolside", "https://inference.poolside.ai/v1", "Bearer"),
 	"api-airforce":     NewGenericAPIKey("api-airforce", "https://api.airforce/v1", "Bearer"),
 	"kilo-gateway":     NewGenericAPIKey("kilo-gateway", "https://api.kilo.ai/api/gateway", "Bearer"),
+	"opencode":         NewGenericAPIKey("opencode", "https://opencode.ai/zen/v1", "Bearer"),
+	"antigravity":      GeminiAdapter{},
 }
 
 func GetAdapter(providerID string) (providers.ProviderAdapter, bool) {

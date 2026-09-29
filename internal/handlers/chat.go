@@ -64,6 +64,14 @@ func (h *Handler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Ensure max_tokens has a healthy floor if unset or very low (< 4096),
+	// so reasoning models don't exhaust the entire token budget before producing visible output text.
+	if mt, ok := body["max_tokens"].(float64); !ok || mt < 4096 {
+		if mct, ok2 := body["max_completion_tokens"].(float64); !ok2 || mct < 4096 {
+			body["max_tokens"] = 8192
+		}
+	}
+
 	if c := resolveCombo(h.DB, modelStr); c != nil && len(c.Models) > 0 {
 		h.handleComboChat(w, r, body, c)
 		return
@@ -347,7 +355,13 @@ func (h *Handler) trySingleChatWithFallback(r *http.Request, body map[string]any
 }
 
 func resolveCombo(db *sql.DB, modelStr string) *repos.Combo {
-	combo, err := repos.GetComboByName(db, modelStr)
+	name := strings.TrimPrefix(modelStr, "combo:")
+	name = strings.TrimPrefix(name, "combo/")
+	combo, err := repos.GetComboByName(db, name)
+	if err == nil && combo != nil {
+		return combo
+	}
+	combo, err = repos.GetComboByName(db, modelStr)
 	if err != nil || combo == nil {
 		return nil
 	}

@@ -13,7 +13,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -108,12 +107,7 @@ func (m *Manager) StartCloudflare(port int) (string, error) {
 	m.cancelFunc = cancel
 
 	cmd := exec.CommandContext(ctx, binPath, "tunnel", "--url", fmt.Sprintf("http://127.0.0.1:%d", port), "--no-autoupdate", "--retries", "99")
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow:    true,
-			CreationFlags: 0x08000000,
-		}
-	}
+	setSysProcAttr(cmd)
 
 	pr, pw := io.Pipe()
 	cmd.Stdout = pw
@@ -271,9 +265,7 @@ func (m *Manager) CheckTailscale() map[string]any {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, tsBin, "status", "--json")
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
-	}
+	setSysProcAttr(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return map[string]any{
@@ -332,9 +324,7 @@ func (m *Manager) EnableTailscale(port int) (string, error) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, tsBin, "funnel", fmt.Sprintf("%d", port), "on")
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
-	}
+	setSysProcAttr(cmd)
 	_ = cmd.Run()
 
 	m.mu.Lock()
@@ -354,9 +344,7 @@ func (m *Manager) DisableTailscale(port int) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, tsBin, "funnel", fmt.Sprintf("%d", port), "off")
-		if runtime.GOOS == "windows" {
-			cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
-		}
+		setSysProcAttr(cmd)
 		_ = cmd.Run()
 	}
 	m.mu.Lock()

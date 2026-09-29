@@ -361,6 +361,36 @@ func normalizeProviderAlias(alias string) string {
 		return "api-airforce"
 	case "kgw", "kilogateway":
 		return "kilo-gateway"
+	case "kr":
+		return "kiro"
+	case "kc":
+		return "kilocode"
+	case "ps":
+		return "poolside"
+	case "samba":
+		return "sambanova"
+	case "bzl":
+		return "bazaarlink"
+	case "oc":
+		return "opencode"
+	case "ocz":
+		return "opencode-zen"
+	case "ag":
+		return "antigravity"
+	case "gh":
+		return "github"
+	case "gc":
+		return "gemini-cli"
+	case "cc":
+		return "claude"
+	case "cu":
+		return "cursor"
+	case "ws":
+		return "windsurf"
+	case "bm":
+		return "bluesminds"
+	case "mmf":
+		return "mimo-free"
 	default:
 		return alias
 	}
