@@ -12,7 +12,13 @@
  * "cline-free/deepseek-v4.1-flash" into "deepseek-v4.1-flash" and match
  * MODEL_PRICING, so the namespace is checked before both fallbacks.
  */
-export const FREE_MODEL_NAMESPACES = ["cline-free/"];
+export const FREE_MODEL_NAMESPACES = [
+  "cline-free/",
+  "cf/",
+  "kgw/kilo-auto/free",
+  "bzl/auto:free",
+  "openrouter/",
+];
 
 export const ZERO_PRICING = {
   input: 0, output: 0, cached: 0, reasoning: 0, cache_creation: 0,
@@ -369,6 +375,17 @@ export const PATTERN_PRICING = [
   // --- Grok ---
   { pattern: "grok-code-*",     pricing: { input: 0.50,  output: 2.00,  cached: 0.25,  reasoning: 3.00,   cache_creation: 0.50  } },
   { pattern: "grok-*",          pricing: { input: 0.50,  output: 2.00,  cached: 0.25,  reasoning: 3.00,   cache_creation: 0.50  } },
+
+  // --- Cloudflare Workers AI / free providers ---
+  { pattern: "llama-3*",        pricing: { input: 0,     output: 0,     cached: 0,     reasoning: 0,      cache_creation: 0     } },
+  { pattern: "llama-4*",        pricing: { input: 0,     output: 0,     cached: 0,     reasoning: 0,      cache_creation: 0     } },
+  { pattern: "@cf/*",           pricing: { input: 0,     output: 0,     cached: 0,     reasoning: 0,      cache_creation: 0     } },
+  { pattern: "glm-4.7-flash",   pricing: { input: 0,     output: 0,     cached: 0,     reasoning: 0,      cache_creation: 0     } },
+  { pattern: "kilo-auto*",      pricing: { input: 0,     output: 0,     cached: 0,     reasoning: 0,      cache_creation: 0     } },
+  { pattern: "laguna-*",        pricing: { input: 0,     output: 0,     cached: 0,     reasoning: 0,      cache_creation: 0     } },
+  { pattern: "llama-*",         pricing: { input: 0,     output: 0,     cached: 0,     reasoning: 0,      cache_creation: 0     } },
+  { pattern: "mistral-small-*", pricing: { input: 0,     output: 0,     cached: 0,     reasoning: 0,      cache_creation: 0     } },
+  { pattern: "qwq-*",           pricing: { input: 0,     output: 0,     cached: 0,     reasoning: 0,      cache_creation: 0     } },
 ];
 
 /**
@@ -401,6 +418,10 @@ export function getPricingForModel(provider, model) {
 
   // 2. Free namespaces bill $0 regardless of the model name behind them.
   if (isFreeModel(model)) return ZERO_PRICING;
+
+  // 2b. Provider-level free namespaces (cf, kgw, geraikita, ag free tier)
+  const FREE_PROVIDERS = ["cf", "kgw", "geraikita", "ps", "cerebras", "groq", "samba"];
+  if (provider && FREE_PROVIDERS.includes(provider)) return ZERO_PRICING;
 
   // 3. Canonical model pricing (strip vendor prefix if needed: "deepseek/deepseek-chat" → "deepseek-chat")
   const baseModel = model.includes("/") ? model.split("/").pop() : model;
