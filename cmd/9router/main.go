@@ -16,6 +16,7 @@ import (
 	"github.com/dresar/go-9router/internal/config"
 	"github.com/dresar/go-9router/internal/handlers"
 	"github.com/dresar/go-9router/internal/logging"
+	"github.com/dresar/go-9router/internal/middleware"
 	"github.com/dresar/go-9router/internal/router"
 	"github.com/dresar/go-9router/internal/server"
 	"github.com/dresar/go-9router/internal/storage"
@@ -57,6 +58,9 @@ func main() {
 	fs := flag.NewFlagSet("9router", flag.ExitOnError)
 	portFlag := fs.String("port", "", "Port to run the server (default: 20128)")
 	pShort := fs.String("p", "", "Port (shorthand)")
+	directPortFlag := fs.String("direct-port", "", "Direct port without API key (default: 20129)")
+	dpShort := fs.String("dp", "", "Direct port (shorthand)")
+	noAuthPortsFlag := fs.String("no-auth-ports", "", "Comma-separated ports that bypass API key authentication")
 	hostFlag := fs.String("host", "", "Host to bind (default: 0.0.0.0)")
 	hShort := fs.String("H", "", "Host (shorthand)")
 	noBrowser := fs.Bool("no-browser", false, "Don't open browser automatically")
@@ -77,6 +81,8 @@ Commands:
 
 Options:
   -p, --port <port>          Port to run the server (default: 20128)
+  -dp, --direct-port <port>  Direct port without API key (default: 20129)
+  --no-auth-ports <ports>    Comma-separated ports that bypass API key
   -H, --host <host>          Host to bind (default: 0.0.0.0)
   -n, --no-browser           Don't open browser automatically
   -l, --log                  Show server logs
@@ -104,6 +110,17 @@ Options:
 		cfg.Port = portStr
 	}
 
+	directPortStr := *directPortFlag
+	if directPortStr == "" {
+		directPortStr = *dpShort
+	}
+	if directPortStr != "" {
+		cfg.DirectPort = directPortStr
+	}
+	if *noAuthPortsFlag != "" {
+		cfg.NoAuthPorts = *noAuthPortsFlag
+	}
+
 	hostStr := *hostFlag
 	if hostStr == "" {
 		hostStr = *hShort
@@ -120,8 +137,16 @@ Options:
 		portNum = 20128
 	}
 
-	// Clean up stale processes on the port
+	directPortNum, err := strconv.Atoi(cfg.DirectPort)
+	if err != nil || directPortNum <= 0 {
+		directPortNum = 20129
+	}
+
+	// Clean up stale processes on the ports
 	cli.KillProcessOnPort(portNum)
+	if cfg.EnableDirectPort && directPortNum > 0 && directPortNum != portNum {
+		cli.KillProcessOnPort(directPortNum)
+	}
 
 	cli.ShowBanner(version)
 	displayHost := hostStr
@@ -130,10 +155,17 @@ Options:
 	}
 	lanIP := cli.GetLanIP()
 	if lanIP != "" && hostStr == "0.0.0.0" {
-		fmt.Printf("🌐 LAN Address:     http://%s:%d\n", lanIP, portNum)
+		fmt.Printf("🌐 LAN Address:       http://%s:%d\n", lanIP, portNum)
 	}
-	fmt.Printf("🚀 Web Dashboard:   http://%s:%d/endpoint\n", displayHost, portNum)
-	fmt.Printf("🔌 API Endpoint:    http://%s:%d/v1\n\n", displayHost, portNum)
+	fmt.Printf("🚀 Web Dashboard:     http://%s:%d/endpoint\n", displayHost, portNum)
+	fmt.Printf("🔌 API Endpoint:      http://%s:%d/v1 (Protected/Auth)\n", displayHost, portNum)
+	if cfg.EnableDirectPort && directPortNum > 0 {
+		fmt.Printf("⚡ Direct Endpoint:   http://%s:%d/v1 (No API Key Required)\n", displayHost, directPortNum)
+		if lanIP != "" && hostStr == "0.0.0.0" {
+			fmt.Printf("⚡ Direct LAN:        http://%s:%d/v1 (No API Key Required)\n", lanIP, directPortNum)
+		}
+	}
+	fmt.Println()
 
 	db, err := storage.Open(cfg.DataDir)
 	if err != nil {
@@ -147,14 +179,31 @@ Options:
 
 	h := &handlers.Handler{DB: db, Cfg: cfg}
 	mux := router.New(h, cfg.JWTSecret)
+
+	// Main server (port e.g. 20128) - with ServerPortKey = portNum, IsDirectNoAuth = false
 	addr := fmt.Sprintf("%s:%d", hostStr, portNum)
-	srv := server.New(addr, mux, cfg.ReadHeaderTimeout, cfg.IdleTimeout)
+	mainHandler := middleware.WithServerPort(portNum, false)(mux)
+	srv := server.New(addr, mainHandler, cfg.ReadHeaderTimeout, cfg.IdleTimeout)
 
 	go func() {
 		if err := srv.Start(); err != nil && err.Error() != "http: Server closed" {
 			log.Fatalf("server error: %v", err)
 		}
 	}()
+
+	// Direct server without API key (port e.g. 20129) - with ServerPortKey = directPortNum, IsDirectNoAuth = true
+	var directSrv *server.Server
+	if cfg.EnableDirectPort && directPortNum > 0 && directPortNum != portNum {
+		directAddr := fmt.Sprintf("%s:%d", hostStr, directPortNum)
+		directHandler := middleware.WithServerPort(directPortNum, true)(mux)
+		directSrv = server.New(directAddr, directHandler, cfg.ReadHeaderTimeout, cfg.IdleTimeout)
+
+		go func() {
+			if err := directSrv.Start(); err != nil && err.Error() != "http: Server closed" {
+				logging.Warn("SERVER", "direct server error", "err", err)
+			}
+		}()
+	}
 
 	// Start background 1-hour periodic GitHub sync check
 	updater.GetManager().StartScheduler(1 * time.Hour)
@@ -177,6 +226,9 @@ Options:
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(ctx)
+	if directSrv != nil {
+		_ = directSrv.Shutdown(ctx)
+	}
 	logging.Info("SERVER", "stopped gracefully")
 }
 

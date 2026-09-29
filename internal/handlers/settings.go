@@ -38,6 +38,9 @@ func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {
 	safe["enableObservability"] = repos.SettingBool(settings, "enableObservability", true)
 	safe["enableRequestLogs"] = h.Cfg.EnableRequestLogs
 	safe["enableTranslator"] = false
+	safe["directPort"] = repos.SettingStr(settings, "directPort", h.Cfg.DirectPort)
+	safe["noAuthPorts"] = repos.SettingStr(settings, "noAuthPorts", h.Cfg.NoAuthPorts)
+	safe["directNoAuthEnabled"] = repos.SettingBool(settings, "directNoAuthEnabled", h.Cfg.EnableDirectPort)
 	w.Header().Set("Cache-Control", "no-store")
 	h.JSON(w, http.StatusOK, safe)
 }

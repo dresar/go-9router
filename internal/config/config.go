@@ -8,23 +8,26 @@ import (
 )
 
 type Config struct {
-	Port                string
-	DataDir             string
-	JWTSecret           string
-	InitialPassword     string
-	APIKeySecret        string
-	MachineIDSalt       string
-	EnableRequestLogs   bool
+	Port                 string
+	DirectPort           string
+	NoAuthPorts          string
+	EnableDirectPort     bool
+	DataDir              string
+	JWTSecret            string
+	InitialPassword      string
+	APIKeySecret         string
+	MachineIDSalt        string
+	EnableRequestLogs    bool
 	ObservabilityEnabled bool
-	AuthCookieSecure    bool
-	RequireAPIKey       bool
-	BaseURL             string
-	CloudURL            string
-	SearxNGURL          string
-	HTTPProxy           string
-	HTTPSProxy          string
-	AllProxy            string
-	NoProxy             string
+	AuthCookieSecure     bool
+	RequireAPIKey        bool
+	BaseURL              string
+	CloudURL             string
+	SearxNGURL           string
+	HTTPProxy            string
+	HTTPSProxy           string
+	AllProxy             string
+	NoProxy              string
 
 	ReadHeaderTimeout time.Duration
 	WriteTimeout      time.Duration
@@ -37,6 +40,9 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		Port:                 envStr("PORT", "20128"),
+		DirectPort:           envStr("DIRECT_PORT", "20129"),
+		NoAuthPorts:          envStr("NO_AUTH_PORTS", "20129"),
+		EnableDirectPort:     envBool("ENABLE_DIRECT_PORT", true),
 		DataDir:              envStr("DATA_DIR", "data"),
 		JWTSecret:            envStr("JWT_SECRET", "9router-default-jwt-session-secret-key-2026"),
 		InitialPassword:      envStr("INITIAL_PASSWORD", "admin1234"),

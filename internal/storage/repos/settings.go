@@ -4,12 +4,30 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 )
 
 type Settings map[string]any
 
+var (
+	settingsCacheMu sync.RWMutex
+	cachedSettings  Settings
+	settingsExpires time.Time
+)
+
 func GetSettings(db *sql.DB) (Settings, error) {
+	settingsCacheMu.RLock()
+	if cachedSettings != nil && time.Now().Before(settingsExpires) {
+		res := make(Settings, len(cachedSettings))
+		for k, v := range cachedSettings {
+			res[k] = v
+		}
+		settingsCacheMu.RUnlock()
+		return res, nil
+	}
+	settingsCacheMu.RUnlock()
+
 	var data string
 	err := db.QueryRow(`SELECT data FROM settings WHERE id = 1`).Scan(&data)
 	if err == sql.ErrNoRows {
@@ -22,10 +40,25 @@ func GetSettings(db *sql.DB) (Settings, error) {
 	if err := json.Unmarshal([]byte(data), &s); err != nil {
 		return Settings{}, nil
 	}
-	return s, nil
+
+	settingsCacheMu.Lock()
+	cachedSettings = s
+	settingsExpires = time.Now().Add(3 * time.Second)
+	settingsCacheMu.Unlock()
+
+	res := make(Settings, len(s))
+	for k, v := range s {
+		res[k] = v
+	}
+	return res, nil
 }
 
 func UpdateSettings(db *sql.DB, updates map[string]any) (Settings, error) {
+	settingsCacheMu.Lock()
+	cachedSettings = nil
+	settingsExpires = time.Time{}
+	settingsCacheMu.Unlock()
+
 	current, err := GetSettings(db)
 	if err != nil {
 		return nil, err

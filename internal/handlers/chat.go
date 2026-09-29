@@ -9,10 +9,12 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dresar/go-9router/internal/combo"
 	"github.com/dresar/go-9router/internal/logging"
+	"github.com/dresar/go-9router/internal/middleware"
 	"github.com/dresar/go-9router/internal/providers"
 	"github.com/dresar/go-9router/internal/providers/adapters"
 	"github.com/dresar/go-9router/internal/storage/repos"
@@ -37,17 +39,23 @@ func (h *Handler) HandleChat(w http.ResponseWriter, r *http.Request) {
 
 	settings, _ := repos.GetSettings(h.DB)
 
-	requireKey := repos.SettingBool(settings, "requireApiKey", h.Cfg.RequireAPIKey)
-	if requireKey {
-		apiKey := extractAPIKey(r)
-		if apiKey == "" {
-			h.JSONError(w, http.StatusUnauthorized, "Missing API key")
-			return
-		}
-		valid, _ := repos.ValidateAPIKey(h.DB, apiKey)
-		if !valid {
-			h.JSONError(w, http.StatusUnauthorized, "Invalid API key")
-			return
+	// Port-based security: check if this port or context allows direct no-auth bypass
+	noAuthPorts := h.GetNoAuthPorts(settings)
+	isNoAuth := middleware.IsDirectNoAuthRequest(r, noAuthPorts)
+
+	if !isNoAuth {
+		requireKey := repos.SettingBool(settings, "requireApiKey", h.Cfg.RequireAPIKey)
+		if requireKey {
+			apiKey := extractAPIKey(r)
+			if apiKey == "" {
+				h.JSONError(w, http.StatusUnauthorized, "Missing API key")
+				return
+			}
+			valid, _ := repos.ValidateAPIKey(h.DB, apiKey)
+			if !valid {
+				h.JSONError(w, http.StatusUnauthorized, "Invalid API key")
+				return
+			}
 		}
 	}
 
@@ -344,18 +352,73 @@ func (h *Handler) trySingleChatWithFallback(r *http.Request, body map[string]any
 	return nil, fmt.Sprintf("provider '%s' temporarily unavailable", providerID)
 }
 
+func (h *Handler) GetNoAuthPorts(settings repos.Settings) []string {
+	ports := []string{"20129"}
+	if h.Cfg != nil {
+		if h.Cfg.DirectPort != "" {
+			ports = append(ports, strings.TrimSpace(h.Cfg.DirectPort))
+		}
+		if h.Cfg.NoAuthPorts != "" {
+			for _, p := range strings.Split(h.Cfg.NoAuthPorts, ",") {
+				if trimmed := strings.TrimSpace(p); trimmed != "" {
+					ports = append(ports, trimmed)
+				}
+			}
+		}
+	}
+	if settings != nil {
+		if dp := repos.SettingStr(settings, "directPort", ""); dp != "" {
+			ports = append(ports, dp)
+		}
+		if val, ok := settings["noAuthPorts"]; ok {
+			if str, ok := val.(string); ok && str != "" {
+				for _, p := range strings.Split(str, ",") {
+					if trimmed := strings.TrimSpace(p); trimmed != "" {
+						ports = append(ports, trimmed)
+					}
+				}
+			}
+		}
+	}
+	return ports
+}
+
+var (
+	comboCacheMu sync.RWMutex
+	cachedCombos = make(map[string]*cachedComboEntry)
+)
+
+type cachedComboEntry struct {
+	combo     *repos.Combo
+	expiresAt time.Time
+}
+
 func resolveCombo(db *sql.DB, modelStr string) *repos.Combo {
 	name := strings.TrimPrefix(modelStr, "combo:")
 	name = strings.TrimPrefix(name, "combo/")
+
+	comboCacheMu.RLock()
+	if c, ok := cachedCombos[name]; ok && time.Now().Before(c.expiresAt) {
+		comboCacheMu.RUnlock()
+		return c.combo
+	}
+	comboCacheMu.RUnlock()
+
 	combo, err := repos.GetComboByName(db, name)
 	if err == nil && combo != nil {
+		comboCacheMu.Lock()
+		cachedCombos[name] = &cachedComboEntry{combo: combo, expiresAt: time.Now().Add(5 * time.Second)}
+		comboCacheMu.Unlock()
 		return combo
 	}
 	combo, err = repos.GetComboByName(db, modelStr)
-	if err != nil || combo == nil {
-		return nil
+	if err == nil && combo != nil {
+		comboCacheMu.Lock()
+		cachedCombos[name] = &cachedComboEntry{combo: combo, expiresAt: time.Now().Add(5 * time.Second)}
+		comboCacheMu.Unlock()
+		return combo
 	}
-	return combo
+	return nil
 }
 
 func extractAPIKey(r *http.Request) string {
