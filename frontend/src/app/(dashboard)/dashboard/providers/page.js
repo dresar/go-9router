@@ -170,9 +170,11 @@ export default function ProvidersPage() {
   }, []);
 
   const getProviderStats = (providerId, authType) => {
-    const authTypes = Array.isArray(authType) ? authType : [authType];
+    const authTypes = Array.isArray(authType) ? authType : authType ? [authType] : [];
     const providerConnections = connections.filter(
-      (c) => c.provider === providerId && authTypes.includes(c.authType),
+      (c) =>
+        c.provider === providerId &&
+        (authTypes.length === 0 || authTypes.includes(c.authType) || authTypes.includes("all")),
     );
 
     const getEffectiveStatus = (conn) => {
@@ -185,19 +187,18 @@ export default function ProvidersPage() {
         : conn.testStatus;
     };
 
-    const connected = providerConnections.filter((c) => {
-      const status = getEffectiveStatus(c);
-      return status === "active" || status === "success";
-    }).length;
-
-    const errorConns = providerConnections.filter((c) => {
+    const isConnError = (c) => {
       const status = getEffectiveStatus(c);
       return (
         status === "error" || status === "expired" || status === "unavailable"
       );
-    });
+    };
+
+    const activeConnections = providerConnections.filter((c) => c.isActive !== false);
+    const errorConns = activeConnections.filter(isConnError);
 
     const error = errorConns.length;
+    const connected = activeConnections.filter((c) => !isConnError(c)).length;
     const total = providerConnections.length;
     const allDisabled =
       total > 0 && providerConnections.every((c) => c.isActive === false);
@@ -216,12 +217,12 @@ export default function ProvidersPage() {
   const matchStatus = (stats, isNoAuth) =>
     matchesStatusFilter(statusFilter, stats, isNoAuth);
 
-  // Toggle all connections for a provider on/off. authType may be a single
-  // string or an array (kiro counts oauth + api_key/apikey together).
+  // Toggle all connections for a provider on/off.
   const handleToggleProvider = async (providerId, authType, newActive) => {
-    const authTypes = Array.isArray(authType) ? authType : [authType];
+    const authTypes = Array.isArray(authType) ? authType : authType ? [authType] : [];
     const matches = (c) =>
-      c.provider === providerId && authTypes.includes(c.authType);
+      c.provider === providerId &&
+      (authTypes.length === 0 || authTypes.includes(c.authType) || authTypes.includes("all"));
     const providerConns = connections.filter(matches);
     setConnections((prev) =>
       prev.map((c) => (matches(c) ? { ...c, isActive: newActive } : c)),

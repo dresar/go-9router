@@ -597,7 +597,7 @@ gemini extensions install https://github.com/manalkaff/opendesign
 export const getProviderModelsForMapping = (providers) => {
   const result = [];
   providers.forEach(conn => {
-    if (conn.isActive && (conn.testStatus === "active" || conn.testStatus === "success")) {
+    if (conn.isActive && conn.testStatus !== "error" && conn.testStatus !== "expired") {
       result.push({
         connectionId: conn.id,
         provider: conn.provider,
