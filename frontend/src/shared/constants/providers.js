@@ -111,6 +111,15 @@ export const PAID_PROVIDERS = new Set([
   "fish-audio",
 
   // Deleted / disabled providers requested by user
+  "cline",
+  "clinepass",
+  "byteplus",
+  "byteplus-modelark",
+  "chutes",
+  "venice",
+  "morph",
+  "vercel-ai-gateway",
+  "commandcode",
   "ollama",
   "ollama-local",
   "ollama-search",

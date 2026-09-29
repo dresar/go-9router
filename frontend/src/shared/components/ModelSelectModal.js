@@ -7,7 +7,7 @@ import ProviderIcon from "./ProviderIcon";
 import CapacityBadges from "./CapacityBadges";
 import { useModelCaps } from "@/shared/hooks/useModelCaps";
 import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
-import { OAUTH_PROVIDERS, APIKEY_PROVIDERS, FREE_PROVIDERS, FREE_TIER_PROVIDERS, AI_PROVIDERS, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, getProviderAlias } from "@/shared/constants/providers";
+import { OAUTH_PROVIDERS, APIKEY_PROVIDERS, FREE_PROVIDERS, FREE_TIER_PROVIDERS, AI_PROVIDERS, PAID_PROVIDERS, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, getProviderAlias } from "@/shared/constants/providers";
 
 // Provider order: OAuth first, then Free Tier, then API Key (matches dashboard/providers)
 const PROVIDER_ORDER = [
@@ -212,11 +212,10 @@ export default function ModelSelectModal({
       ? NO_AUTH_PROVIDER_IDS.filter((id) => (AI_PROVIDERS[id]?.serviceKinds || ["llm"]).includes(kindFilter))
       : NO_AUTH_PROVIDER_IDS;
 
-    // Only show connected providers (including both standard and custom)
-    const providerIdsToShow = new Set([
-      ...activeConnectionIds,  // Only connected providers
-      ...noAuthIds,            // No-auth providers (kind-filtered)
-    ]);
+    // Only show connected providers (excluding paid/deleted providers)
+    const providerIdsToShow = new Set(
+      [...activeConnectionIds, ...noAuthIds].filter((id) => !PAID_PROVIDERS.has(id))
+    );
 
     // Sort by PROVIDER_ORDER
     const sortedProviderIds = [...providerIdsToShow].sort((a, b) => {
@@ -450,13 +449,20 @@ export default function ModelSelectModal({
         if (models.length === 0) return;
       }
       if (query) {
-        const providerNameMatches = group.name.toLowerCase().includes(query);
-        models = models.filter(
-          (m) =>
-            m.name.toLowerCase().includes(query) ||
-            m.id.toLowerCase().includes(query)
-        );
-        if (models.length === 0 && !providerNameMatches) return;
+        const providerNameMatches =
+          group.name.toLowerCase().includes(query) ||
+          providerId.toLowerCase().includes(query) ||
+          (group.alias && group.alias.toLowerCase().includes(query));
+
+        if (!providerNameMatches) {
+          models = models.filter(
+            (m) =>
+              m.name.toLowerCase().includes(query) ||
+              m.id.toLowerCase().includes(query) ||
+              (m.value && m.value.toLowerCase().includes(query))
+          );
+        }
+        if (models.length === 0) return;
       }
       filtered[providerId] = {
         ...group,

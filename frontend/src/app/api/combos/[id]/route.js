@@ -43,6 +43,9 @@ export async function PUT(request, { params }) {
     
     // Capture previous name to invalidate rotation state on rename
     const prev = await getComboById(id);
+    if (body.models && Array.isArray(body.models)) {
+      body.models = body.models.slice(0, 3);
+    }
     const combo = await updateCombo(id, body);
     
     if (!combo) {
