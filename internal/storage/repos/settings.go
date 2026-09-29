@@ -110,3 +110,23 @@ func SettingStr(s Settings, key, def string) string {
 	}
 	return def
 }
+
+func SettingStringSlice(s Settings, key string) []string {
+	v, ok := s[key]
+	if !ok {
+		return nil
+	}
+	switch sl := v.(type) {
+	case []string:
+		return sl
+	case []any:
+		var out []string
+		for _, item := range sl {
+			if str, ok := item.(string); ok {
+				out = append(out, str)
+			}
+		}
+		return out
+	}
+	return nil
+}

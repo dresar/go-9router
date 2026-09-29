@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"net/http"
 	"net/http/httputil"
@@ -21,7 +22,8 @@ func (h *Handler) HandleUsageStats(w http.ResponseWriter, r *http.Request) {
 		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	stats, err := repos.GetUsageStats(h.DB)
+	period := r.URL.Query().Get("period")
+	stats, err := repos.GetUsageStatsWithPeriod(h.DB, period)
 	if err != nil {
 		h.JSONError(w, http.StatusInternalServerError, "failed to get usage stats")
 		return
@@ -67,9 +69,35 @@ func (h *Handler) HandleUsageStream(w http.ResponseWriter, r *http.Request) {
 		h.JSONError(w, http.StatusInternalServerError, "streaming not supported")
 		return
 	}
-	w.Write([]byte("data: {\"type\":\"connected\"}\n\n"))
-	flusher.Flush()
-	<-r.Context().Done()
+
+	sendUpdate := func() {
+		stats, err := repos.GetUsageStatsWithPeriod(h.DB, "today")
+		if err == nil && stats != nil {
+			payload := map[string]any{
+				"activeRequests": stats.ActiveRequests,
+				"recentRequests": stats.RecentRequests,
+				"errorProvider":  "",
+				"pending":        stats.Pending,
+			}
+			b, _ := json.Marshal(payload)
+			w.Write([]byte(fmt.Sprintf("data: %s\n\n", string(b))))
+			flusher.Flush()
+		}
+	}
+
+	sendUpdate()
+
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			sendUpdate()
+		}
+	}
 }
 
 func (h *Handler) HandleRequestDetails(w http.ResponseWriter, r *http.Request) {
@@ -124,12 +152,12 @@ func (h *Handler) HandleRequestLogs(w http.ResponseWriter, r *http.Request) {
 		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	details, err := repos.ListRequestDetails(h.DB, 100, 0)
-	if err != nil || details == nil {
-		h.JSON(w, http.StatusOK, []any{})
+	logs, err := repos.GetRecentLogs(h.DB, 200)
+	if err != nil || logs == nil {
+		h.JSON(w, http.StatusOK, []string{})
 		return
 	}
-	h.JSON(w, http.StatusOK, details)
+	h.JSON(w, http.StatusOK, logs)
 }
 
 func (h *Handler) HandleUsageChart(w http.ResponseWriter, r *http.Request) {
@@ -137,22 +165,10 @@ func (h *Handler) HandleUsageChart(w http.ResponseWriter, r *http.Request) {
 		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	now := time.Now()
-	type Bucket struct {
-		Label    string  `json:"label"`
-		Tokens   int64   `json:"tokens"`
-		Cost     float64 `json:"cost"`
-		Requests int     `json:"requests"`
-	}
-	buckets := make([]Bucket, 24)
-	for i := 0; i < 24; i++ {
-		t := now.Add(-time.Duration(23-i) * time.Hour)
-		buckets[i] = Bucket{
-			Label:    t.Format("15:04"),
-			Tokens:   0,
-			Cost:     0,
-			Requests: 0,
-		}
+	period := r.URL.Query().Get("period")
+	buckets, err := repos.GetChartData(h.DB, period)
+	if err != nil || buckets == nil {
+		buckets = []repos.ChartBucket{}
 	}
 	h.JSON(w, http.StatusOK, buckets)
 }
@@ -183,11 +199,7 @@ func (h *Handler) HandleUsageProviders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleUsageLogs(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		h.JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	h.JSON(w, http.StatusOK, map[string]any{"logs": []any{}})
+	h.HandleRequestLogs(w, r)
 }
 
 func (h *Handler) HandleUsageConnectionSub(w http.ResponseWriter, r *http.Request) {

@@ -12,19 +12,39 @@ import (
 
 func RequireSession(secret string, db *sql.DB, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token := extractSessionToken(r)
-		if token != "" && auth.VerifySession(token, secret) == nil {
+		var noAuthPorts []string
+		if db != nil {
+			if settings, err := repos.GetSettings(db); err == nil {
+				noAuthPorts = repos.SettingStringSlice(settings, "noAuthPorts")
+				if len(noAuthPorts) == 0 {
+					noAuthPorts = []string{"20129"}
+				}
+			}
+		}
+		if IsDirectNoAuthRequest(r, noAuthPorts) {
 			next.ServeHTTP(w, r)
 			return
+		}
+
+		token := extractSessionToken(r)
+		if token != "" {
+			if auth.VerifySession(token, secret) == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if db != nil {
+				if valid, _ := repos.ValidateAPIKey(db, token); valid {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
 		}
 
 		if db != nil {
 			settings, err := repos.GetSettings(db)
 			if err == nil && !repos.SettingBool(settings, "requireLogin", false) {
-				if isLocalRequest(r) {
-					next.ServeHTTP(w, r)
-					return
-				}
+				next.ServeHTTP(w, r)
+				return
 			}
 		}
 
@@ -40,7 +60,10 @@ func extractSessionToken(r *http.Request) string {
 	}
 	authHeader := r.Header.Get("Authorization")
 	if strings.HasPrefix(authHeader, "Bearer ") {
-		return authHeader[7:]
+		return strings.TrimSpace(authHeader[7:])
+	}
+	if apiKey := r.Header.Get("x-api-key"); apiKey != "" {
+		return strings.TrimSpace(apiKey)
 	}
 	return ""
 }

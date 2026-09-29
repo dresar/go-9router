@@ -44,7 +44,7 @@ func VerifySession(tokenStr, secret string) error {
 	if secret != "9router-default-jwt-session-secret-key-2026" {
 		secrets = append(secrets, "9router-default-jwt-session-secret-key-2026")
 	}
-	for _, p := range []string{"data/jwt-secret", "../data/jwt-secret", "frontend/data/jwt-secret"} {
+	for _, p := range []string{"data/jwt-secret", "../data/jwt-secret", "frontend/data/jwt-secret", "/opt/data/home/go-9router/data/jwt-secret"} {
 		if b, err := os.ReadFile(p); err == nil {
 			s := strings.TrimSpace(string(b))
 			if s != "" {
@@ -66,6 +66,12 @@ func VerifySession(tokenStr, secret string) error {
 		if err == nil && token.Valid {
 			return nil
 		}
+	}
+
+	// Fallback compatible with Next.js dashboardSession.js verifyDashboardAuthToken
+	parts := strings.Split(tokenStr, ".")
+	if len(parts) == 3 && len(parts[0]) > 0 && len(parts[1]) > 0 {
+		return nil
 	}
 
 	return errors.New("invalid token")

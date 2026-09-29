@@ -477,6 +477,11 @@ func (h *Handler) recordObservability(providerID, modelStr, connectionID, status
 		},
 	})
 
+	tokensJson, _ := json.Marshal(map[string]any{
+		"prompt_tokens":     pTokens,
+		"completion_tokens": cTokens,
+		"total_tokens":      pTokens + cTokens,
+	})
 	_ = repos.SaveUsage(h.DB, repos.UsageRecord{
 		Timestamp:        time.Now().UTC().Format(time.RFC3339Nano),
 		Provider:         providerID,
@@ -486,6 +491,7 @@ func (h *Handler) recordObservability(providerID, modelStr, connectionID, status
 		PromptTokens:     pTokens,
 		CompletionTokens: cTokens,
 		Status:           status,
+		Tokens:           string(tokensJson),
 	})
 }
 
