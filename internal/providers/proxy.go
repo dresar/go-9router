@@ -64,6 +64,7 @@ func getProxyHTTPClient(proxyURL string) (*http.Client, error) {
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 20,
 		IdleConnTimeout:     90 * time.Second,
+		ResponseHeaderTimeout: 20 * time.Second,
 	}
 	client := &http.Client{
 		Timeout:   0,

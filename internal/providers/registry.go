@@ -32,9 +32,10 @@ type UpstreamResult struct {
 var httpClient = &http.Client{
 	Timeout: 0,
 	Transport: &http.Transport{
-		MaxIdleConns:        100,
-		MaxIdleConnsPerHost: 20,
-		IdleConnTimeout:     90 * time.Second,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   20,
+		IdleConnTimeout:       90 * time.Second,
+		ResponseHeaderTimeout: 20 * time.Second,
 	},
 }
 

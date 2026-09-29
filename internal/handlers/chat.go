@@ -302,16 +302,13 @@ func (h *Handler) trySingleChatWithFallback(r *http.Request, body map[string]any
 			break
 		}
 
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-		req, err := adapter.BuildRequest(ctx, body, sel.Credentials)
+		req, err := adapter.BuildRequest(r.Context(), body, sel.Credentials)
 		if err != nil {
-			cancel()
 			providers.RecordConnectionEnd(sel.Credentials.ConnectionID)
 			break
 		}
 
-		result, err := providers.DoUpstreamWithProxy(ctx, req, h.DB, sel.Credentials)
-		cancel()
+		result, err := providers.DoUpstreamWithProxy(r.Context(), req, h.DB, sel.Credentials)
 
 		latencyMs := time.Since(startTime).Milliseconds()
 		if err != nil {
@@ -546,7 +543,11 @@ func (h *Handler) callNodeChat(ctx context.Context, body map[string]any) (*provi
 		return nil, "request error"
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "text/event-stream, application/json")
+	if stream.IsSSERequest(body) {
+		req.Header.Set("Accept", "text/event-stream")
+	} else {
+		req.Header.Set("Accept", "application/json")
+	}
 
 	if keys, err := repos.ListAPIKeys(h.DB); err == nil {
 		for _, k := range keys {
