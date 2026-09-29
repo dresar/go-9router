@@ -216,14 +216,18 @@ func (h *Handler) handleSingleChat(w http.ResponseWriter, r *http.Request, body 
 		if result.Success {
 			latencyMs := time.Since(startTime).Milliseconds()
 			providers.RecordConnectionSuccess(h.DB, sel.Credentials.ConnectionID, latencyMs)
-			go h.recordObservability(providerID, modelStr, sel.Credentials.ConnectionID, "success", latencyMs, body)
 
 			defer result.Response.Body.Close()
 			if stream.IsSSERequest(body) {
+				// Streaming: record observability with estimated tokens, then proxy
+				go h.recordObservability(providerID, modelStr, sel.Credentials.ConnectionID, "success", latencyMs, body)
 				if err := stream.ProxySSE(r.Context(), w, result.Response); err != nil {
 					logging.Warn("STREAM", "SSE proxy error", "err", err)
 				}
 			} else {
+				// Non-streaming: read body, extract real usage, then forward to client
+				realUsage, _ := extractUsageFromResponse(result.Response)
+				go h.recordObservabilityWithUsage(providerID, modelStr, sel.Credentials.ConnectionID, "success", latencyMs, body, realUsage)
 				if err := stream.ProxyJSON(result.Response, w); err != nil {
 					logging.Warn("CHAT", "JSON proxy error", "err", err)
 				}
@@ -437,28 +441,126 @@ func copyMap(m map[string]any) map[string]any {
 	return out
 }
 
+// TokenUsage holds real token counts extracted from provider response.
+type TokenUsage struct {
+	PromptTokens     int
+	CompletionTokens int
+	CachedTokens     int
+	CacheCreation    int
+}
+
+// extractUsageFromResponse reads a JSON response body and extracts token usage.
+// It returns the extracted usage (may be zeroed if not found) and the original body bytes for re-streaming.
+func extractUsageFromResponse(resp *http.Response) (TokenUsage, []byte) {
+	if resp == nil || resp.Body == nil {
+		return TokenUsage{}, nil
+	}
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
+	resp.Body.Close()
+	resp.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	if err != nil {
+		return TokenUsage{}, bodyBytes
+	}
+
+	var usage TokenUsage
+	// Try standard OpenAI-compatible usage object
+	var parsed struct {
+		Usage struct {
+			PromptTokens            int `json:"prompt_tokens"`
+			CompletionTokens        int `json:"completion_tokens"`
+			TotalTokens             int `json:"total_tokens"`
+			PromptTokensDetails     *struct {
+				CachedTokens int `json:"cached_tokens"`
+			} `json:"prompt_tokens_details"`
+			CompletionTokensDetails *struct{} `json:"completion_tokens_details"`
+		} `json:"usage"`
+		// Anthropic / Claude style
+		UsageAnthropic struct {
+			InputTokens              int `json:"input_tokens"`
+			OutputTokens             int `json:"output_tokens"`
+			CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+			CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+		} `json:"usage_metadata"`
+		// Gemini style
+		UsageMetadata struct {
+			PromptTokenCount     int `json:"promptTokenCount"`
+			CandidatesTokenCount int `json:"candidatesTokenCount"`
+			CachedContentTokenCount int `json:"cachedContentTokenCount"`
+		} `json:"usageMetadata"`
+	}
+	if json.Unmarshal(bodyBytes, &parsed) == nil {
+		// OpenAI/standard
+		if parsed.Usage.PromptTokens > 0 || parsed.Usage.CompletionTokens > 0 {
+			usage.PromptTokens = parsed.Usage.PromptTokens
+			usage.CompletionTokens = parsed.Usage.CompletionTokens
+			if parsed.Usage.PromptTokensDetails != nil {
+				usage.CachedTokens = parsed.Usage.PromptTokensDetails.CachedTokens
+			}
+		}
+		// Anthropic usage_metadata fallback
+		if usage.PromptTokens == 0 && parsed.UsageAnthropic.InputTokens > 0 {
+			usage.PromptTokens = parsed.UsageAnthropic.InputTokens
+			usage.CompletionTokens = parsed.UsageAnthropic.OutputTokens
+			usage.CachedTokens = parsed.UsageAnthropic.CacheReadInputTokens
+			usage.CacheCreation = parsed.UsageAnthropic.CacheCreationInputTokens
+		}
+		// Gemini usageMetadata fallback
+		if usage.PromptTokens == 0 && parsed.UsageMetadata.PromptTokenCount > 0 {
+			usage.PromptTokens = parsed.UsageMetadata.PromptTokenCount
+			usage.CompletionTokens = parsed.UsageMetadata.CandidatesTokenCount
+			usage.CachedTokens = parsed.UsageMetadata.CachedContentTokenCount
+		}
+	}
+	return usage, bodyBytes
+}
+
 func (h *Handler) recordObservability(providerID, modelStr, connectionID, status string, latencyMs int64, body map[string]any) {
+	h.recordObservabilityWithUsage(providerID, modelStr, connectionID, status, latencyMs, body, TokenUsage{})
+}
+
+func (h *Handler) recordObservabilityWithUsage(providerID, modelStr, connectionID, status string, latencyMs int64, body map[string]any, realUsage TokenUsage) {
 	settings, _ := repos.GetSettings(h.DB)
 	if !repos.SettingBool(settings, "enableObservability", true) && !h.Cfg.ObservabilityEnabled {
 		return
 	}
 
-	pTokens := 0
-	if msgs, ok := body["messages"].([]any); ok {
-		for _, m := range msgs {
-			if mm, ok := m.(map[string]any); ok {
-				if content, ok := mm["content"].(string); ok {
-					pTokens += len(content) / 4
+	pTokens := realUsage.PromptTokens
+	cTokens := realUsage.CompletionTokens
+	cachedTokens := realUsage.CachedTokens
+	cacheCreation := realUsage.CacheCreation
+
+	// Estimate from request body if response didn't have real token data
+	if pTokens == 0 {
+		if msgs, ok := body["messages"].([]any); ok {
+			for _, m := range msgs {
+				if mm, ok := m.(map[string]any); ok {
+					if content, ok := mm["content"].(string); ok {
+						pTokens += len(content) / 4
+					}
 				}
 			}
 		}
+		if pTokens < 10 {
+			pTokens = 15
+		}
 	}
-	if pTokens < 10 {
-		pTokens = 15
+	if cTokens == 0 {
+		cTokens = 60
 	}
-	cTokens := 60
 
 	reqID := fmt.Sprintf("%s-%s-%s", time.Now().Format("20060102-150405"), randomSuffix(6), cleanModelName(modelStr))
+
+	tokensMap := map[string]any{
+		"prompt_tokens":     pTokens,
+		"completion_tokens": cTokens,
+		"total_tokens":      pTokens + cTokens,
+	}
+	if cachedTokens > 0 {
+		tokensMap["cached_tokens"] = cachedTokens
+	}
+	if cacheCreation > 0 {
+		tokensMap["cache_creation_input_tokens"] = cacheCreation
+	}
 
 	_ = repos.SaveRequestDetail(h.DB, repos.RequestDetail{
 		ID:           reqID,
@@ -470,18 +572,10 @@ func (h *Handler) recordObservability(providerID, modelStr, connectionID, status
 		Latency: map[string]any{
 			"total": latencyMs,
 		},
-		Tokens: map[string]any{
-			"prompt_tokens":     pTokens,
-			"completion_tokens": cTokens,
-			"total_tokens":      pTokens + cTokens,
-		},
+		Tokens: tokensMap,
 	})
 
-	tokensJson, _ := json.Marshal(map[string]any{
-		"prompt_tokens":     pTokens,
-		"completion_tokens": cTokens,
-		"total_tokens":      pTokens + cTokens,
-	})
+	tokensJson, _ := json.Marshal(tokensMap)
 	_ = repos.SaveUsage(h.DB, repos.UsageRecord{
 		Timestamp:        time.Now().UTC().Format(time.RFC3339Nano),
 		Provider:         providerID,
