@@ -594,11 +594,10 @@ function ComboCard({ combo, getCaps, comboByName = {}, activeProviders = [], cop
             <code className="block truncate font-mono text-sm font-medium">{combo.name}</code>
             <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
               {combo.models.length === 0 ? (
-                <span className="text-xs text-text-muted italic">No active models</span>
+                <span className="text-xs text-text-muted italic">No models</span>
               ) : (
                 combo.models.slice(0, 3).map((model, index) => (
-                  <code key={index} className="inline-flex items-center gap-1 rounded bg-black/5 px-1.5 py-0.5 font-mono text-xs text-text-muted dark:bg-white/5 border border-border/40">
-                    <span className="text-[10px] font-bold text-primary">#{index + 1}</span>
+                  <code key={index} className="inline-flex items-center gap-1 rounded bg-black/5 px-1.5 py-0.5 font-mono text-xs text-text-muted dark:bg-white/5">
                     <span>{model}</span>
                     <CapacityBadges caps={
                       comboByName[model]
@@ -608,11 +607,8 @@ function ComboCard({ combo, getCaps, comboByName = {}, activeProviders = [], cop
                   </code>
                 ))
               )}
-              {combo.inactiveModels?.length > 0 && (
-                <span className="inline-flex items-center gap-1 rounded bg-black/5 dark:bg-white/5 px-1.5 py-0.5 text-[10px] text-text-muted opacity-80" title={`Model non-aktif: ${combo.inactiveModels.join(", ")}`}>
-                  <span className="material-symbols-outlined text-[12px]">pause_circle</span>
-                  <span>{combo.inactiveModels.length} non-aktif</span>
-                </span>
+              {combo.models.length > 3 && (
+                <span className="text-[10px] text-text-muted">+{combo.models.length - 3} more</span>
               )}
             </div>
             {comboCaps && (
@@ -912,10 +908,11 @@ function CapacityAdapterCap({ cap, entry, onChange, activeProviders, getCaps }) 
   );
 }
 
-function ModelItem({ id, index, model, isFirst, isLast, onEdit, onMoveUp, onMoveDown, onDeactivate, onRemove }) {
+function ModelItem({ id, index, model, isFirst, isLast, onEdit, onMoveUp, onMoveDown, onRemove }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({ id });
   const style = {
     transform: CSS.Transform.toString(transform),
+    // no transition — prevents the CSS settle animation fighting React's re-render on drop
     opacity: isDragging ? 0.4 : 1,
     zIndex: isDragging ? 999 : undefined,
   };
@@ -954,8 +951,8 @@ function ModelItem({ id, index, model, isFirst, isLast, onEdit, onMoveUp, onMove
         </svg>
       </button>
 
-      {/* Priority badge */}
-      <span className="text-[10px] font-bold text-primary bg-primary/10 px-1 py-0.5 rounded w-5 text-center shrink-0">#{index + 1}</span>
+      {/* Index badge */}
+      <span className="text-[10px] font-medium text-text-muted w-3 text-center shrink-0">{index + 1}</span>
 
       {/* Inline editable model value */}
       {editing ? (
@@ -997,18 +994,6 @@ function ModelItem({ id, index, model, isFirst, isLast, onEdit, onMoveUp, onMove
         </button>
       </div>
 
-      {/* Deactivate to backup */}
-      {onDeactivate && (
-        <button
-          type="button"
-          onClick={onDeactivate}
-          className="p-0.5 hover:bg-amber-500/10 rounded text-text-muted hover:text-amber-500 transition-all"
-          title="Jadikan non-aktif / cadangan"
-        >
-          <span className="material-symbols-outlined text-[13px]">pause_circle</span>
-        </button>
-      )}
-
       {/* Remove */}
       <button
         onClick={onRemove}
@@ -1022,9 +1007,9 @@ function ModelItem({ id, index, model, isFirst, isLast, onEdit, onMoveUp, onMove
 }
 
 function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindFilter = null }) {
+  // Initialize state with combo values - key prop on parent handles reset on remount
   const [name, setName] = useState(combo?.name || "");
-  const [models, setModels] = useState((combo?.models || []).slice(0, 3));
-  const [inactiveModels, setInactiveModels] = useState(combo?.inactiveModels || []);
+  const [models, setModels] = useState(combo?.models || []);
   const [showModelSelect, setShowModelSelect] = useState(false);
   const [saving, setSaving] = useState(false);
   const [nameError, setNameError] = useState("");
@@ -1035,6 +1020,7 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  // Use stable index-based IDs so duplicates and similar names are handled correctly
   const modelItems = models.map((model, i) => ({ uid: `item-${i}`, model }));
 
   const handleDragEnd = (event) => {
@@ -1084,44 +1070,17 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
   };
 
   const handleAddModel = (model) => {
-    const val = model?.value || model?.name || model;
-    if (!val) return;
-    if (models.includes(val) || inactiveModels.includes(val)) return;
-    if (models.length < 3) {
-      setModels([...models, val]);
-    } else {
-      setInactiveModels([...inactiveModels, val]);
+    if (!models.includes(model.value)) {
+      setModels([...models, model.value]);
     }
   };
 
   const handleDeselectModel = (model) => {
-    const val = model?.value || model?.name || model;
-    setModels(models.filter((m) => m !== val));
-    setInactiveModels(inactiveModels.filter((m) => m !== val));
+    setModels(models.filter((m) => m !== model.value));
   };
 
-  const handleRemoveActive = (index) => {
+  const handleRemoveModel = (index) => {
     setModels(models.filter((_, i) => i !== index));
-  };
-
-  const handleRemoveInactive = (index) => {
-    setInactiveModels(inactiveModels.filter((_, i) => i !== index));
-  };
-
-  const handleDeactivate = (index) => {
-    const target = models[index];
-    setModels(models.filter((_, i) => i !== index));
-    setInactiveModels([target, ...inactiveModels]);
-  };
-
-  const handleActivate = (index) => {
-    if (models.length >= 3) {
-      alert("Maksimal 3 model yang aktif! Nonaktifkan salah satu model terlebih dahulu.");
-      return;
-    }
-    const target = inactiveModels[index];
-    setInactiveModels(inactiveModels.filter((_, i) => i !== index));
-    setModels([...models, target]);
   };
 
   const handleMoveUp = (index) => {
@@ -1141,11 +1100,7 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
   const handleSave = async () => {
     if (!validateName(name)) return;
     setSaving(true);
-    await onSave({
-      name: name.trim(),
-      models: models.slice(0, 3),
-      inactiveModels,
-    });
+    await onSave({ name: name.trim(), models });
     setSaving(false);
   };
 
@@ -1173,112 +1128,49 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
             </p>
           </div>
 
-          {/* Active Models */}
+          {/* Models */}
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <div className="flex items-center gap-1.5">
-                <label className="text-sm font-medium">Model Aktif</label>
-                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                  models.length === 3
-                    ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-                    : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                }`}>
-                  {models.length}/3 Aktif
-                </span>
-              </div>
-              <span className="text-[11px] text-text-muted">Maksimal 3 model dieksekusi router</span>
-            </div>
+            <label className="text-sm font-medium mb-1.5 block">Models</label>
 
             {models.length === 0 ? (
               <div className="text-center py-4 border border-dashed border-black/10 dark:border-white/10 rounded-lg bg-black/[0.01] dark:bg-white/[0.01]">
                 <span className="material-symbols-outlined text-text-muted text-xl mb-1">layers</span>
-                <p className="text-xs text-text-muted">Belum ada model aktif (maksimal 3)</p>
+                <p className="text-xs text-text-muted">No models added yet</p>
               </div>
             ) : (
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd} modifiers={[restrictToVerticalAxis, restrictToParentElement]}>
-                <SortableContext items={modelItems.map((m) => m.uid)} strategy={verticalListSortingStrategy}>
-                  <div className="flex max-h-[35vh] min-w-0 flex-col gap-1 overflow-y-auto sm:max-h-[180px]">
-                    {modelItems.map(({ uid, model }, index) => (
-                      <ModelItem
-                        key={uid}
-                        id={uid}
-                        index={index}
-                        model={model}
-                        isFirst={index === 0}
-                        isLast={index === modelItems.length - 1}
-                        onEdit={(newVal) => {
-                          const updated = [...models];
-                          updated[index] = newVal;
-                          setModels(updated);
-                        }}
-                        onMoveUp={() => handleMoveUp(index)}
-                        onMoveDown={() => handleMoveDown(index)}
-                        onDeactivate={() => handleDeactivate(index)}
-                        onRemove={() => handleRemoveActive(index)}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
-            )}
-
-            {/* Inactive / Backup Models */}
-            <div className="mt-3">
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="flex items-center gap-1.5">
-                  <label className="text-xs font-medium text-text-muted">Model Non-Aktif / Cadangan</label>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/5 dark:bg-white/5 text-text-muted">
-                    {inactiveModels.length} Model (Bebas)
-                  </span>
-                </div>
-                <span className="text-[10px] text-text-muted">Tidak dieksekusi router</span>
-              </div>
-
-              {inactiveModels.length === 0 ? (
-                <div className="py-2 text-center text-xs text-text-muted/60 border border-dashed border-black/5 dark:border-white/5 rounded-md">
-                  Tidak ada model non-aktif / cadangan
-                </div>
-              ) : (
-                <div className="flex max-h-[140px] flex-col gap-1 overflow-y-auto rounded-md border border-border/40 p-1 bg-black/[0.01] dark:bg-white/[0.01]">
-                  {inactiveModels.map((model, index) => (
-                    <div key={`inactive-${model}-${index}`} className="flex items-center justify-between gap-1.5 rounded px-2 py-1 bg-black/[0.02] dark:bg-white/[0.02]">
-                      <span className="text-xs font-mono text-text-muted truncate flex-1">{model}</span>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => handleActivate(index)}
-                          disabled={models.length >= 3}
-                          className={`px-2 py-0.5 text-[11px] font-medium rounded transition-colors ${
-                            models.length >= 3
-                              ? "text-text-muted/30 cursor-not-allowed"
-                              : "text-primary hover:bg-primary/10"
-                          }`}
-                          title={models.length >= 3 ? "Maksimal 3 model aktif penuh" : "Aktifkan model ini"}
-                        >
-                          Aktifkan
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveInactive(index)}
-                          className="p-0.5 text-text-muted hover:text-red-500 rounded"
-                          title="Hapus"
-                        >
-                          <span className="material-symbols-outlined text-[13px]">close</span>
-                        </button>
-                      </div>
-                    </div>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd} modifiers={[restrictToVerticalAxis, restrictToParentElement]}>
+              <SortableContext items={modelItems.map((m) => m.uid)} strategy={verticalListSortingStrategy}>
+                <div className="flex max-h-[55vh] min-w-0 flex-col gap-1 overflow-y-auto sm:max-h-[350px]">
+                  {modelItems.map(({ uid, model }, index) => (
+                    <ModelItem
+                      key={uid}
+                      id={uid}
+                      index={index}
+                      model={model}
+                      isFirst={index === 0}
+                      isLast={index === modelItems.length - 1}
+                      onEdit={(newVal) => {
+                        const updated = [...models];
+                        updated[index] = newVal;
+                        setModels(updated);
+                      }}
+                      onMoveUp={() => handleMoveUp(index)}
+                      onMoveDown={() => handleMoveDown(index)}
+                      onRemove={() => handleRemoveModel(index)}
+                    />
                   ))}
                 </div>
-              )}
-            </div>
+              </SortableContext>
+            </DndContext>
+            )}
 
             {/* Add Model button */}
             <button
               onClick={() => setShowModelSelect(true)}
-              className="w-full mt-3 py-2 border border-dashed border-black/10 dark:border-white/10 rounded-lg text-xs text-primary font-medium hover:text-primary hover:border-primary/50 transition-colors flex items-center justify-center gap-1"
+              className="w-full mt-2 py-2 border border-dashed border-black/10 dark:border-white/10 rounded-lg text-xs text-primary font-medium hover:text-primary hover:border-primary/50 transition-colors flex items-center justify-center gap-1"
             >
               <span className="material-symbols-outlined text-[16px]">add</span>
-              Tambah Model
+              Add Model
             </button>
           </div>
 
@@ -1308,9 +1200,9 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
           onDeselect={handleDeselectModel}
           activeProviders={activeProviders}
           modelAliases={modelAliases}
-          title="Tambah Model ke Kombinasi"
+          title="Add Model to Combo"
           kindFilter={kindFilter}
-          addedModelValues={[...models, ...inactiveModels]}
+          addedModelValues={models}
           closeOnSelect={false}
         />
       )}
