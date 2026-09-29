@@ -205,15 +205,45 @@ export default function ProviderDetailPage() {
     ? (providerNode?.prefix || providerId)
     : providerAlias;
 
+  // Union of LLM models
+  const allModels = [
+    ...models,
+    ...kiloFreeModels.filter((fm) => !models.some((m) => m.id === fm.id)),
+  ].filter((m) => { const k = getModelKind(m); return !k || k === "llm"; });
+  const disabledSet = new Set(disabledModelIds);
+  const displayModels = allModels.filter((m) => !disabledSet.has(m.id));
+  const disabledDisplayModels = allModels.filter((m) => disabledSet.has(m.id));
+  const customModelRows = getProviderCustomModelRows({
+    customModels,
+    modelAliases,
+    providerAlias: providerStorageAlias,
+    builtInModels: models,
+    type: "llm",
+  });
+  const activeModelsCount = displayModels.length + customModelRows.length;
+
   const fetchDisabledModels = useCallback(async () => {
     try {
       const res = await fetch(`/api/models/disabled?providerAlias=${encodeURIComponent(providerStorageAlias)}`, { cache: "no-store" });
       const data = await res.json();
-      if (res.ok) setDisabledModelIds(data.ids || []);
+      if (res.ok) {
+        const fetchedIds = data.ids || [];
+        if (!data.hasConfig && fetchedIds.length === 0 && allModels.length > 5) {
+          const defaultDisabled = allModels.slice(5).map((m) => m.id);
+          await fetch("/api/models/disabled", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ providerAlias: providerStorageAlias, ids: defaultDisabled }),
+          });
+          setDisabledModelIds(defaultDisabled);
+          return;
+        }
+        setDisabledModelIds(fetchedIds);
+      }
     } catch (error) {
       console.log("Error fetching disabled models:", error);
     }
-  }, [providerStorageAlias]);
+  }, [providerStorageAlias, allModels.length]);
 
   const handleDisableModel = async (modelId) => {
     try {
@@ -229,6 +259,10 @@ export default function ProviderDetailPage() {
   };
 
   const handleEnableModel = async (modelId) => {
+    if (activeModelsCount >= 5) {
+      alert(translate("Maksimal 5 model yang aktif secara bersamaan! Nonaktifkan salah satu model terlebih dahulu sebelum mengaktifkan model ini."));
+      return;
+    }
     try {
       const res = await fetch(`/api/models/disabled?providerAlias=${encodeURIComponent(providerStorageAlias)}&id=${encodeURIComponent(modelId)}`, { method: "DELETE" });
       if (res.ok) await fetchDisabledModels();
@@ -259,9 +293,20 @@ export default function ProviderDetailPage() {
   };
 
   const handleEnableAll = async () => {
+    const availableSlots = 5 - activeModelsCount;
+    if (availableSlots <= 0) {
+      alert(translate("Maksimal 5 model yang aktif secara bersamaan! Nonaktifkan model lain terlebih dahulu."));
+      return;
+    }
     try {
-      const res = await fetch(`/api/models/disabled?providerAlias=${encodeURIComponent(providerStorageAlias)}`, { method: "DELETE" });
-      if (res.ok) await fetchDisabledModels();
+      const toEnable = disabledDisplayModels.slice(0, availableSlots).map((m) => m.id);
+      for (const mId of toEnable) {
+        await fetch(`/api/models/disabled?providerAlias=${encodeURIComponent(providerStorageAlias)}&id=${encodeURIComponent(mId)}`, { method: "DELETE" });
+      }
+      await fetchDisabledModels();
+      if (disabledDisplayModels.length > availableSlots) {
+        alert(translate("Maksimal 5 model aktif. Mengaktifkan") + ` ${toEnable.length} ` + translate("model hingga batas 5 model."));
+      }
     } catch (error) {
       console.log("Error enabling all models:", error);
     }
@@ -555,6 +600,10 @@ export default function ProviderDetailPage() {
   // `transport` pins a realtime STT dispatch marker (shared whitelist
   // STT_TRANSPORT_META); the API only honours it on type "stt" records.
   const handleAddCustomModel = async (modelId, type = "llm", providerAliasOverride = providerStorageAlias, caps, transport) => {
+    if (type === "llm" && activeModelsCount >= 5) {
+      alert(translate("Maksimal 5 model yang aktif secara bersamaan! Nonaktifkan salah satu model terlebih dahulu sebelum menambahkan model aktif baru."));
+      return;
+    }
     try {
       const res = await fetch("/api/models/custom", {
         method: "POST",
@@ -1212,23 +1261,6 @@ export default function ProviderDetailPage() {
         />
       );
     }
-    // Combine hardcoded models with Kilo free models (deduplicated)
-    // Exclude non-llm models (embedding, tts, etc.) — they have dedicated pages under media-providers
-    const allModels = [
-      ...models,
-      ...kiloFreeModels.filter((fm) => !models.some((m) => m.id === fm.id)),
-    ].filter((m) => { const k = getModelKind(m); return !k || k === "llm"; });
-    const disabledSet = new Set(disabledModelIds);
-    const displayModels = allModels.filter((m) => !disabledSet.has(m.id));
-    const disabledDisplayModels = allModels.filter((m) => disabledSet.has(m.id));
-    const customModelRows = getProviderCustomModelRows({
-      customModels,
-      modelAliases,
-      providerAlias: providerStorageAlias,
-      builtInModels: models,
-      type: "llm",
-    });
-
     return (
       <div className="flex flex-wrap gap-3">
         {/* Custom models first */}
@@ -1357,15 +1389,17 @@ export default function ProviderDetailPage() {
 
         {/* Disabled models — restorable */}
         {disabledDisplayModels.length > 0 && (
-          <div className="w-full mt-2">
-            <p className="text-xs text-text-muted mb-2">Disabled models ({disabledDisplayModels.length}):</p>
+          <div className="w-full mt-4 pt-3 border-t border-black/10 dark:border-white/10">
+            <p className="text-xs text-text-muted mb-2 font-medium">
+              Disabled models ({disabledDisplayModels.length}) — Click + to activate (up to 5 active models max):
+            </p>
             <div className="flex flex-wrap gap-2">
               {disabledDisplayModels.map((m) => (
                 <button
                   key={m.id}
                   onClick={() => handleEnableModel(m.id)}
                   className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-dashed border-black/10 dark:border-white/10 text-xs text-text-muted hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-colors"
-                  title="Restore model"
+                  title="Click to activate model (up to 5 max)"
                 >
                   <span className="material-symbols-outlined text-[13px]">add</span>
                   {m.id}
@@ -1796,6 +1830,9 @@ export default function ProviderDetailPage() {
             <h2 className="text-lg font-semibold">
               {"Available Models"}
             </h2>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium border border-primary/20">
+              Active: {activeModelsCount}/5 (Max 5)
+            </span>
             {providerThinkingLevels && (
               <select
                 value={thinkingMode}
@@ -1819,7 +1856,7 @@ export default function ProviderDetailPage() {
               <div className="flex gap-2">
                 {disabledModelIds.length > 0 && (
                   <Button size="sm" variant="secondary" icon="restart_alt" onClick={handleEnableAll}>
-                    Active All
+                    {allIds.length > 5 ? "Active (Max 5)" : "Active All"}
                   </Button>
                 )}
                 {activeIds.length > 0 && (

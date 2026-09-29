@@ -71,9 +71,9 @@ const DEFAULT_PROVIDER_MODELS = {
     { id: "sambanova/gpt-oss-120b", name: "GPT OSS 120B", subtitle: "Reconfigurable dataflow" },
   ],
   bynara: [
-    { id: "bynara/deepseek-v4-flash-alibaba", name: "DeepSeek V4 Flash", subtitle: "Bynara router accelerated" },
-    { id: "bynara/claude-sonnet-5", name: "Claude Sonnet 5", subtitle: "Flagship intelligence" },
+    { id: "bynara/space-bunny-alpha-bynara", name: "Space Bunny Alpha", subtitle: "Bynara flagship free router" },
     { id: "bynara/agnes-2.5-flash", name: "Agnes 2.5 Flash", subtitle: "Multimodal via Bynara" },
+    { id: "bynara/agnes-3-flash", name: "Agnes 3 Flash", subtitle: "Reasoning & Vision" },
   ],
   geraikita: [
     { id: "geraikita/claude-haiku-4.5", name: "Claude Haiku 4.5", subtitle: "1M context (Recommended)" },

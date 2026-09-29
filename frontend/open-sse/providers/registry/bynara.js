@@ -27,6 +27,7 @@ export default {
     },
   },
   models: [
+    { id: "space-bunny-alpha-bynara", name: "Space Bunny Alpha byNara", reasoning: true, vision: true },
     { id: "agnes-2.5-flash", name: "Agnes 2.5 Flash", reasoning: true, vision: true },
     { id: "agnes-3-flash", name: "Agnes 3 Flash", reasoning: true, vision: true },
     { id: "agnes-video-v2.0", name: "Agnes Video 2.0" },
@@ -78,7 +79,6 @@ export default {
     { id: "qwen3.8-max", name: "Qwen3.8-Max", vision: true },
     { id: "qwen3.8-max-alibaba", name: "Qwen3.8-Max Alibaba", vision: true },
     { id: "space-bunny-alpha", name: "Space Bunny Alpha", reasoning: true, vision: true },
-    { id: "space-bunny-alpha-bynara", name: "Space Bunny Alpha byNara", reasoning: true, vision: true },
     { id: "step-5-preview", name: "Step 5 Preview", reasoning: true, vision: true },
     { id: "stepfun-3.7-flash", name: "Stepfun 3.7 Flash", reasoning: true, vision: true },
     { id: "deepseek-v4-flash", name: "DeepSeek v4 Flash 0731" },
