@@ -36,6 +36,76 @@ export function isConnectionError(c: Connection): boolean {
   return false
 }
 
+export function getProviderStatus(conns: Connection[]): {
+  status: "ready" | "cooldown" | "error" | "inactive"
+  label: string
+  errorCount: number
+} {
+  const active = conns.filter(
+    (c) =>
+      c.isActive &&
+      c.testStatus !== "unavailable" &&
+      c.testStatus !== "error" &&
+      (c.errorCode === 0 || c.errorCode === null || c.errorCode === undefined)
+  )
+  const cooldown = conns.filter((c) => isConnectionInCooldown(c))
+  const errors = conns.filter((c) => isConnectionError(c))
+
+  if (cooldown.length > 0) {
+    return { status: "cooldown", label: "⏱ Cooldown", errorCount: errors.length }
+  }
+  if (active.length > 0) {
+    return { status: "ready", label: "⊙ Ready", errorCount: errors.length }
+  }
+  if (errors.length > 0) {
+    return { status: "error", label: `△ ${errors.length} Isu`, errorCount: errors.length }
+  }
+  return { status: "inactive", label: "○ Inactive", errorCount: 0 }
+}
+
+export function formatProviderName(raw: string): string {
+  const map: Record<string, string> = {
+    gemini: "Gemini",
+    groq: "Groq",
+    openrouter: "Openrouter",
+    node_apinex: "Node_apinex",
+    "codebuddy-intl": "Codebuddy-Intl",
+    qoder: "Qoder",
+    github: "Github",
+    "openai-compatible-chat-tabitoken": "Openai-Compatible-Chat-Tabitoken",
+    "gemini-cli": "Gemini-Cli",
+    ollama: "Ollama",
+    bynara: "Bynara",
+    "vercel-ai-gateway": "Vercel-Ai-Gateway",
+    "api-airforce": "API Airforce",
+    node_b_ai_api: "B AI API",
+    node_dahl_global: "Dahl Global",
+    node_9inference_cloud: "9inference Cloud",
+    node_openagentic_id: "Openagentic ID",
+    "grok-cli": "Grok CLI",
+    "opencode-go": "OpenCode Go",
+    "xiaomi-tokenplan": "Xiaomi TokenPlan",
+    "cloudflare-ai": "Cloudflare AI",
+    clinepass: "ClinePass",
+    "kilo-gateway": "Kilo Gateway"
+  }
+  return map[raw] || raw.charAt(0).toUpperCase() + raw.slice(1)
+}
+
+export function getProviderColor(raw: string): string {
+  const map: Record<string, string> = {
+    gemini: "#1a4fc4",
+    groq: "#f59e0b",
+    openrouter: "#7c3aed",
+    github: "#333333",
+    mistral: "#ff6b35",
+    bynara: "#10b981",
+    "cloudflare-ai": "#f48120",
+    qoder: "#06b6d4"
+  }
+  return map[raw.toLowerCase()] || "#27272a"
+}
+
 export function maskIdentity(email?: string, name?: string): string {
   const target = email || name || ""
   if (!target) return "-"

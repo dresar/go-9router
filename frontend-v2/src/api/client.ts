@@ -9,6 +9,8 @@ import type {
   AuthStatusResponse
 } from "../types"
 
+const DEFAULT_API_KEY = "sk-7016dd129191d903-u8emvi-c0b721b9"
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {
@@ -19,13 +21,16 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    Authorization: `Bearer ${DEFAULT_API_KEY}`,
+    ...(options.body ? { "Content-Type": "application/json" } : {}),
+    ...(options.headers as Record<string, string>)
+  }
+
   const res = await fetch(path, {
     credentials: "same-origin",
-    headers: {
-      "Accept": "application/json",
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...options.headers
-    },
+    headers,
     ...options
   })
 
@@ -75,36 +80,39 @@ export const api = {
 
   async getConnections(): Promise<Connection[]> {
     try {
-      const res = await request<{ connections: Connection[] }>("/api/connections")
+      const res = await request<any>("/api/connections")
       if (Array.isArray(res?.connections)) {
         return res.connections
       }
-    } catch (e: any) {
-      if (e?.status === 401) {
-        throw e
+      if (Array.isArray(res)) {
+        return res
       }
+    } catch (e: any) {
+      if (e?.status === 401) throw e
     }
 
     try {
-      const res = await request<{ connections: Connection[] }>("/api/providers")
+      const res = await request<any>("/api/providers")
       if (Array.isArray(res?.connections)) {
         return res.connections
       }
-    } catch (e: any) {
-      if (e?.status === 401) {
-        throw e
+      if (Array.isArray(res)) {
+        return res
       }
+    } catch (e: any) {
+      if (e?.status === 401) throw e
     }
 
     try {
-      const res = await request<{ connections: Connection[] }>("/api/providers/client?provider=all&accountStatus=all&pageSize=500")
+      const res = await request<any>("/api/providers/client?provider=all&accountStatus=all&pageSize=500")
       if (Array.isArray(res?.connections)) {
         return res.connections
       }
-    } catch (e: any) {
-      if (e?.status === 401) {
-        throw e
+      if (Array.isArray(res)) {
+        return res
       }
+    } catch (e: any) {
+      if (e?.status === 401) throw e
     }
 
     return []
@@ -118,11 +126,19 @@ export const api = {
       })
       return res.connection
     } catch {
-      const res = await request<{ connection: Connection }>(`/api/providers/${id}`, {
-        method: "PUT",
-        body: JSON.stringify({ isActive })
-      })
-      return res.connection
+      try {
+        const res = await request<{ connection: Connection }>(`/api/providers/${id}`, {
+          method: "PUT",
+          body: JSON.stringify({ isActive })
+        })
+        return res.connection
+      } catch {
+        const res = await request<{ connection: Connection }>(`/api/connections/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ isActive })
+        })
+        return res.connection
+      }
     }
   },
 
@@ -191,11 +207,10 @@ export const api = {
     signal?: AbortSignal
   }): Promise<{ content: string; latencyMs: number }> {
     const startTime = performance.now()
+    const effectiveKey = params.apiKey || DEFAULT_API_KEY
     const headers: Record<string, string> = {
-      "Content-Type": "application/json"
-    }
-    if (params.apiKey) {
-      headers["Authorization"] = `Bearer ${params.apiKey}`
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${effectiveKey}`
     }
 
     const payload = {
@@ -206,12 +221,7 @@ export const api = {
       stream: true
     }
 
-    let endpoint = "/v1/chat/completions"
-    if (!params.apiKey) {
-      endpoint = "/api/dashboard/chat/completions"
-    }
-
-    const res = await fetch(endpoint, {
+    const res = await fetch("/v1/chat/completions", {
       method: "POST",
       headers,
       body: JSON.stringify(payload),
@@ -253,8 +263,7 @@ export const api = {
 
       for (const line of lines) {
         const trimmed = line.trim()
-        if (!trimmed || trimmed.startsWith(":")) continue
-        if (trimmed === "data: [DONE]") continue
+        if (!trimmed || trimmed.startsWith(":") || trimmed === "data: [DONE]") continue
 
         if (trimmed.startsWith("data: ")) {
           try {
@@ -282,21 +291,5 @@ export const api = {
 
     const latencyMs = Math.round(performance.now() - startTime)
     return { content: fullContent, latencyMs }
-  },
-
-  async chatCompletion(params: {
-    model: string
-    prompt: string
-    apiKey?: string
-    temperature?: number
-    maxTokens?: number
-  }): Promise<{ content: string; latencyMs: number }> {
-    let accumulated = ""
-    return this.chatCompletionStream({
-      ...params,
-      onChunk: (chunk) => {
-        accumulated = chunk
-      }
-    })
   }
 }

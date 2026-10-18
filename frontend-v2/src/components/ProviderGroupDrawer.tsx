@@ -1,21 +1,20 @@
 import React from "react"
 import { Connection } from "../types"
 import { ProviderIcon } from "./ProviderIcon"
+import { ToggleSwitch } from "./ToggleSwitch"
+import { StatusBadge } from "./StatusBadge"
 import {
   isConnectionInCooldown,
   isConnectionError,
+  formatProviderName,
   maskIdentity,
   formatTimeAgo
 } from "../utils/status"
 import {
   X,
   Search,
-  CheckCircle2,
-  AlertTriangle,
-  Clock,
   Power,
   ExternalLink,
-  Code2,
   Copy,
   Check,
   ChevronDown,
@@ -38,8 +37,7 @@ export const ProviderGroupDrawer: React.FC<ProviderGroupDrawerProps> = ({
   onClose,
   onToggleConnection,
   onToggleProviderGlobal,
-  onOpenInTable,
-  onSelectSingleConnection
+  onOpenInTable
 }) => {
   const [search, setSearch] = React.useState("")
   const [filterStatus, setFilterStatus] = React.useState<"all" | "active" | "inactive" | "cooldown">("all")
@@ -69,7 +67,7 @@ export const ProviderGroupDrawer: React.FC<ProviderGroupDrawerProps> = ({
     if (filterStatus === "cooldown" && !isConnectionInCooldown(c) && !isConnectionError(c)) return false
 
     if (search.trim()) {
-      const q = search.toLowerCase()
+      const q = search.toLowerCase().trim()
       const matchName = (c.name || "").toLowerCase().includes(q)
       const matchEmail = (c.email || "").toLowerCase().includes(q)
       const matchId = (c.id || "").toLowerCase().includes(q)
@@ -105,21 +103,21 @@ export const ProviderGroupDrawer: React.FC<ProviderGroupDrawerProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs">
-      <div className="w-full max-w-2xl bg-[#0c0a09] border-l border-[#27272a] h-full flex flex-col shadow-2xl">
-        <div className="flex items-center justify-between border-b border-[#27272a] px-5 py-4 bg-[#121214]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+      <div className="w-full max-w-2xl bg-[#0d0d14] border border-[#1e1e2a] rounded-xl flex flex-col max-h-[90vh] shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[#1e1e2a] px-5 py-4 bg-[#121218] rounded-t-xl">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[#18181b] border border-[#27272a] p-2">
-              <ProviderIcon provider={provider} className="h-6 w-6" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#18181b] border border-[#27272a] p-2">
+              <ProviderIcon provider={provider} className="h-5 w-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-semibold text-white capitalize">{provider}</h2>
-                <span className="rounded bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-xs font-mono text-emerald-400">
+                <h2 className="text-base font-bold text-white">{formatProviderName(provider)}</h2>
+                <span className="rounded bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-xs font-mono text-emerald-400">
                   {activeCount} / {totalCount} Aktif
                 </span>
               </div>
-              <p className="text-xs text-[#a1a1aa] font-mono mt-0.5">
+              <p className="text-xs text-[#71717a] font-mono mt-0.5">
                 Daftar seluruh akun dan kunci terhubung
               </p>
             </div>
@@ -127,12 +125,13 @@ export const ProviderGroupDrawer: React.FC<ProviderGroupDrawerProps> = ({
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={handleGlobalToggle}
               disabled={isGlobalToggling}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-mono font-medium transition-colors ${
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-mono font-medium transition-colors ${
                 isAllActive
-                  ? "border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
-                  : "border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                  ? "border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+                  : "border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
               }`}
             >
               <Power className="h-3.5 w-3.5" />
@@ -140,23 +139,24 @@ export const ProviderGroupDrawer: React.FC<ProviderGroupDrawerProps> = ({
             </button>
 
             <button
+              type="button"
               onClick={onClose}
-              className="rounded-md p-1.5 text-[#a1a1aa] hover:bg-[#27272a] hover:text-white transition-colors"
+              className="rounded-lg p-1.5 text-[#71717a] hover:bg-[#18181b] hover:text-white transition-colors"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
         </div>
 
-        <div className="border-b border-[#27272a] bg-[#121214]/60 px-5 py-3 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+        <div className="border-b border-[#1e1e2a] bg-[#121218]/60 px-5 py-3 flex flex-col sm:flex-row items-center justify-between gap-2.5">
           <div className="relative w-full sm:w-64">
-            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-[#71717a]" />
+            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-[#71717a]" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Cari akun atau email..."
-              className="w-full rounded-md border border-[#27272a] bg-[#18181b] pl-8 pr-3 py-1.5 text-xs text-white placeholder-[#71717a] focus:border-emerald-500 focus:outline-none font-mono"
+              className="w-full rounded-lg border border-[#27272a] bg-[#18181b] pl-8 pr-3 py-1.5 text-xs text-white placeholder-[#71717a] focus:border-emerald-500 focus:outline-none font-mono"
             />
           </div>
 
@@ -164,7 +164,7 @@ export const ProviderGroupDrawer: React.FC<ProviderGroupDrawerProps> = ({
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as any)}
-              className="rounded-md border border-[#27272a] bg-[#18181b] px-2.5 py-1.5 text-xs text-white focus:border-emerald-500 focus:outline-none font-mono"
+              className="rounded-lg border border-[#27272a] bg-[#18181b] px-2.5 py-1.5 text-xs text-white focus:border-emerald-500 focus:outline-none font-mono"
             >
               <option value="all">Semua Akun ({totalCount})</option>
               <option value="active">Aktif Saja ({activeCount})</option>
@@ -173,11 +173,12 @@ export const ProviderGroupDrawer: React.FC<ProviderGroupDrawerProps> = ({
             </select>
 
             <button
+              type="button"
               onClick={() => {
                 onOpenInTable(provider)
                 onClose()
               }}
-              className="flex items-center gap-1 rounded-md border border-[#27272a] bg-[#18181b] px-2.5 py-1.5 text-xs text-[#a1a1aa] hover:text-white transition-colors font-mono shrink-0"
+              className="flex items-center gap-1 rounded-lg border border-[#27272a] bg-[#18181b] px-2.5 py-1.5 text-xs text-[#a1a1aa] hover:text-white transition-colors font-mono shrink-0"
               title="Buka di tabel manajemen koneksi utama"
             >
               <span>Buka di Tabel</span>
@@ -198,6 +199,19 @@ export const ProviderGroupDrawer: React.FC<ProviderGroupDrawerProps> = ({
               const isToggling = togglingId === c.id
               const isExpanded = expandedId === c.id
 
+              let badgeStatus: "ready" | "cooldown" | "error" | "inactive" = "inactive"
+              let badgeLabel = "○ Nonaktif"
+              if (inCooldown) {
+                badgeStatus = "cooldown"
+                badgeLabel = "⏱ Cooldown"
+              } else if (hasErr) {
+                badgeStatus = "error"
+                badgeLabel = "△ Isu"
+              } else if (c.isActive) {
+                badgeStatus = "ready"
+                badgeLabel = "⊙ Ready"
+              }
+
               let quotaStatusText = "Normal"
               if (inCooldown) {
                 quotaStatusText = "Rate Limited / Kuota Tertunda"
@@ -208,7 +222,7 @@ export const ProviderGroupDrawer: React.FC<ProviderGroupDrawerProps> = ({
               return (
                 <div
                   key={c.id}
-                  className="rounded-lg border border-[#27272a] bg-[#121214] p-3.5 space-y-2.5 hover:border-emerald-500/30 transition-colors"
+                  className="rounded-lg border border-[#1e1e2a] bg-[#121218] p-3.5 space-y-2.5 hover:border-emerald-500/30 transition-colors"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
@@ -217,7 +231,7 @@ export const ProviderGroupDrawer: React.FC<ProviderGroupDrawerProps> = ({
                           {c.displayName || c.name || maskIdentity(c.email)}
                         </span>
 
-                        <span className="rounded bg-[#27272a] px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">
+                        <span className="rounded bg-[#18181b] border border-[#27272a] px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">
                           P{c.priority ?? 1}
                         </span>
 
@@ -225,29 +239,10 @@ export const ProviderGroupDrawer: React.FC<ProviderGroupDrawerProps> = ({
                           {c.authType || "apikey"}
                         </span>
 
-                        {inCooldown ? (
-                          <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-[10px] font-mono text-amber-400">
-                            <Clock className="h-2.5 w-2.5" />
-                            <span>⏱ Cooldown</span>
-                          </span>
-                        ) : hasErr ? (
-                          <span className="inline-flex items-center gap-1 rounded bg-rose-500/10 border border-rose-500/30 px-2 py-0.5 text-[10px] font-mono text-rose-400">
-                            <AlertTriangle className="h-2.5 w-2.5" />
-                            <span>Isu Kunci</span>
-                          </span>
-                        ) : c.isActive ? (
-                          <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-mono text-emerald-400">
-                            <CheckCircle2 className="h-2.5 w-2.5" />
-                            <span>Ready</span>
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded bg-[#27272a] px-2 py-0.5 text-[10px] font-mono text-[#71717a]">
-                            Nonaktif
-                          </span>
-                        )}
+                        <StatusBadge status={badgeStatus} label={badgeLabel} />
                       </div>
 
-                      <div className="mt-1 flex items-center gap-3 text-[11px] font-mono text-[#71717a]">
+                      <div className="mt-1 flex items-center gap-2 text-[11px] font-mono text-[#71717a]">
                         <span className="truncate">
                           Email: {maskIdentity(c.email, c.name)}
                         </span>
@@ -257,25 +252,16 @@ export const ProviderGroupDrawer: React.FC<ProviderGroupDrawerProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleSingle(c)}
+                      <ToggleSwitch
+                        checked={c.isActive}
+                        onChange={() => handleToggleSingle(c)}
                         disabled={isToggling}
-                        title={c.isActive ? "Matikan akun ini" : "Aktifkan akun ini"}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          c.isActive ? "bg-emerald-600" : "bg-[#27272a]"
-                        } ${isToggling ? "opacity-50" : ""}`}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs transition duration-200 ease-in-out ${
-                            c.isActive ? "translate-x-4" : "translate-x-0"
-                          }`}
-                        />
-                      </button>
+                        label={c.isActive ? "Matikan akun ini" : "Aktifkan akun ini"}
+                      />
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-[11px] font-mono pt-2 border-t border-[#27272a]/40 text-[#a1a1aa]">
+                  <div className="flex items-center justify-between text-[11px] font-mono pt-2 border-t border-[#1e1e2a] text-[#a1a1aa]">
                     <div>
                       <span className="text-[#71717a]">Status Kuota: </span>
                       <span className={inCooldown ? "text-amber-400" : hasErr ? "text-rose-400" : "text-emerald-400"}>
@@ -286,6 +272,7 @@ export const ProviderGroupDrawer: React.FC<ProviderGroupDrawerProps> = ({
                     <div className="flex items-center gap-2">
                       <span>Terakhir: {formatTimeAgo(c.lastUsedAt)}</span>
                       <button
+                        type="button"
                         onClick={() => setExpandedId(isExpanded ? null : c.id)}
                         className="text-[#71717a] hover:text-white transition-colors"
                         title="Tampilkan raw JSON"
@@ -302,10 +289,11 @@ export const ProviderGroupDrawer: React.FC<ProviderGroupDrawerProps> = ({
                   )}
 
                   {isExpanded && (
-                    <div className="pt-2 border-t border-[#27272a] space-y-2">
+                    <div className="pt-2 border-t border-[#1e1e2a] space-y-2">
                       <div className="flex items-center justify-between text-[10px] font-mono text-[#71717a]">
                         <span>Metadata Diagnostik</span>
                         <button
+                          type="button"
                           onClick={() => handleCopyJson(c)}
                           className="flex items-center gap-1 text-[#a1a1aa] hover:text-white"
                         >
@@ -313,7 +301,7 @@ export const ProviderGroupDrawer: React.FC<ProviderGroupDrawerProps> = ({
                           <span>{copiedId === c.id ? "Tersalin" : "Salin JSON"}</span>
                         </button>
                       </div>
-                      <pre className="text-[10px] font-mono text-emerald-300 bg-[#09090b] p-2.5 rounded-md overflow-x-auto border border-[#27272a]">
+                      <pre className="text-[10px] font-mono text-emerald-300 bg-[#09090b] p-2.5 rounded-lg overflow-x-auto border border-[#1e1e2a]">
                         {JSON.stringify(c, null, 2)}
                       </pre>
                     </div>
@@ -324,14 +312,15 @@ export const ProviderGroupDrawer: React.FC<ProviderGroupDrawerProps> = ({
           )}
         </div>
 
-        <div className="border-t border-[#27272a] p-4 bg-[#121214] flex items-center justify-between text-xs font-mono">
-          <span className="text-[#a1a1aa]">
+        <div className="border-t border-[#1e1e2a] p-4 bg-[#121218] rounded-b-xl flex items-center justify-between text-xs font-mono">
+          <span className="text-[#71717a]">
             Menampilkan {filteredConnections.length} dari {totalCount} akun
           </span>
 
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-md bg-[#27272a] hover:bg-[#3f3f46] px-4 py-1.5 font-sans font-medium text-white transition-colors"
+            className="rounded-lg bg-[#27272a] hover:bg-[#3f3f46] px-4 py-1.5 font-sans font-medium text-white transition-colors"
           >
             Tutup
           </button>

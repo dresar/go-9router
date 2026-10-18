@@ -84,6 +84,8 @@ export interface RequireLoginResponse {
   tunnelUrl?: string
 }
 
+export type Settings = RequireLoginResponse
+
 export interface AuthStatusResponse {
   authenticated: boolean
   requireLogin?: boolean

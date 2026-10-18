@@ -153,14 +153,6 @@ export const App: React.FC = () => {
     return false
   }
 
-  const handleLogout = async () => {
-    await api.logout()
-    setAuthenticated(false)
-    if (requireLogin) {
-      setLoginModalOpen(true)
-    }
-  }
-
   const handleSelectProviderFromOverview = (provider: string) => {
     setSelectedProviderGroup(provider)
   }
@@ -185,10 +177,6 @@ export const App: React.FC = () => {
         totalConnections={connections.length}
         activeConnections={activeCount}
         totalModels={models.length}
-        authenticated={authenticated}
-        requireLogin={requireLogin}
-        onOpenLogin={() => setLoginModalOpen(true)}
-        onLogout={handleLogout}
         onRefresh={loadAllData}
         isLoading={isLoading}
       />
@@ -220,6 +208,7 @@ export const App: React.FC = () => {
             {activeTab === "overview" && (
               <ProviderOverviewGrid
                 connections={connections}
+                selectedProvider={selectedProviderGroup}
                 onSelectProvider={handleSelectProviderFromOverview}
                 onToggleProviderGlobal={handleToggleProviderGlobal}
               />
@@ -263,7 +252,7 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      <footer className="border-t border-[#27272a] bg-[#0c0a09] py-4 text-center text-xs font-mono text-[#71717a]">
+      <footer className="border-t border-[#1e1e2a] bg-[#0d0d14] py-4 text-center text-xs font-mono text-[#71717a]">
         <div className="mx-auto max-w-7xl px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>Go 9Router • High Performance AI Gateway</span>
           <span>
