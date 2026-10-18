@@ -126,6 +126,12 @@ export const api = {
     }
   },
 
+  async updateProviderBatchStatus(connectionIds: string[], isActive: boolean): Promise<boolean> {
+    const promises = connectionIds.map((id) => this.updateConnectionStatus(id, isActive))
+    await Promise.allSettled(promises)
+    return true
+  },
+
   async getModels(): Promise<ModelItem[]> {
     try {
       const res = await request<{ data: ModelItem[] }>("/v1/models")
@@ -175,12 +181,14 @@ export const api = {
     }
   },
 
-  async chatCompletion(params: {
+  async chatCompletionStream(params: {
     model: string
     prompt: string
     apiKey?: string
     temperature?: number
     maxTokens?: number
+    onChunk: (text: string) => void
+    signal?: AbortSignal
   }): Promise<{ content: string; latencyMs: number }> {
     const startTime = performance.now()
     const headers: Record<string, string> = {
@@ -192,11 +200,10 @@ export const api = {
 
     const payload = {
       model: params.model,
-      messages: [
-        { role: "user", content: params.prompt }
-      ],
+      messages: [{ role: "user", content: params.prompt }],
       temperature: params.temperature ?? 0.7,
-      max_tokens: params.maxTokens ?? 300
+      max_tokens: params.maxTokens ?? 300,
+      stream: true
     }
 
     let endpoint = "/v1/chat/completions"
@@ -208,10 +215,9 @@ export const api = {
       method: "POST",
       headers,
       body: JSON.stringify(payload),
-      credentials: "same-origin"
+      credentials: "same-origin",
+      signal: params.signal
     })
-
-    const latencyMs = Math.round(performance.now() - startTime)
 
     if (!res.ok) {
       let errText = `HTTP ${res.status}`
@@ -224,8 +230,73 @@ export const api = {
       throw new Error(errText || `Failed with HTTP ${res.status}`)
     }
 
-    const data = await res.json()
-    const content = data.choices?.[0]?.message?.content || "(empty response)"
-    return { content, latencyMs }
+    if (!res.body) {
+      const data = await res.json()
+      const content = data.choices?.[0]?.message?.content || ""
+      params.onChunk(content)
+      const latencyMs = Math.round(performance.now() - startTime)
+      return { content, latencyMs }
+    }
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let fullContent = ""
+    let buffer = ""
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split("\n")
+      buffer = lines.pop() || ""
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed || trimmed.startsWith(":")) continue
+        if (trimmed === "data: [DONE]") continue
+
+        if (trimmed.startsWith("data: ")) {
+          try {
+            const parsed = JSON.parse(trimmed.slice(6))
+            const delta = parsed.choices?.[0]?.delta?.content || ""
+            if (delta) {
+              fullContent += delta
+              params.onChunk(fullContent)
+            }
+          } catch {}
+        }
+      }
+    }
+
+    if (buffer.trim().startsWith("data: ") && buffer.trim() !== "data: [DONE]") {
+      try {
+        const parsed = JSON.parse(buffer.trim().slice(6))
+        const delta = parsed.choices?.[0]?.delta?.content || ""
+        if (delta) {
+          fullContent += delta
+          params.onChunk(fullContent)
+        }
+      } catch {}
+    }
+
+    const latencyMs = Math.round(performance.now() - startTime)
+    return { content: fullContent, latencyMs }
+  },
+
+  async chatCompletion(params: {
+    model: string
+    prompt: string
+    apiKey?: string
+    temperature?: number
+    maxTokens?: number
+  }): Promise<{ content: string; latencyMs: number }> {
+    let accumulated = ""
+    return this.chatCompletionStream({
+      ...params,
+      onChunk: (chunk) => {
+        accumulated = chunk
+      }
+    })
   }
 }

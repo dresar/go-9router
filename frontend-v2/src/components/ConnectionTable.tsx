@@ -1,15 +1,18 @@
 import React from "react"
 import { Connection } from "../types"
+import { ProviderIcon } from "./ProviderIcon"
+import {
+  isConnectionInCooldown,
+  isConnectionError,
+  maskIdentity,
+  formatTimeAgo
+} from "../utils/status"
 import {
   Search,
-  Filter,
-  ArrowUpDown,
   CheckCircle2,
   AlertTriangle,
-  XCircle,
+  Clock,
   Eye,
-  Sliders,
-  Check,
   Power
 } from "lucide-react"
 
@@ -28,7 +31,7 @@ export const ConnectionTable: React.FC<ConnectionTableProps> = ({
 }) => {
   const [search, setSearch] = React.useState("")
   const [selectedProvider, setSelectedProvider] = React.useState(initialProviderFilter)
-  const [statusFilter, setStatusFilter] = React.useState<"all" | "active" | "inactive" | "issues">("all")
+  const [statusFilter, setStatusFilter] = React.useState<"all" | "active" | "inactive" | "cooldown" | "issues">("all")
   const [sortBy, setSortBy] = React.useState<"priority" | "name" | "provider">("priority")
   const [togglingId, setTogglingId] = React.useState<string | null>(null)
 
@@ -47,40 +50,40 @@ export const ConnectionTable: React.FC<ConnectionTableProps> = ({
   }, [connections])
 
   const filteredConnections = React.useMemo(() => {
-    return connections.filter((c) => {
-      if (selectedProvider !== "all" && c.provider !== selectedProvider) {
-        return false
-      }
-
-      if (statusFilter === "active" && !c.isActive) return false
-      if (statusFilter === "inactive" && c.isActive) return false
-      if (statusFilter === "issues") {
-        const hasIssue = c.testStatus === "error" || c.lastError || (c.errorCode && c.errorCode >= 400)
-        if (!hasIssue) return false
-      }
-
-      if (search.trim()) {
-        const q = search.toLowerCase()
-        const matchName = (c.name || "").toLowerCase().includes(q)
-        const matchEmail = (c.email || "").toLowerCase().includes(q)
-        const matchProvider = (c.provider || "").toLowerCase().includes(q)
-        const matchId = (c.id || "").toLowerCase().includes(q)
-        const matchDisplayName = (c.displayName || "").toLowerCase().includes(q)
-        if (!matchName && !matchEmail && !matchProvider && !matchId && !matchDisplayName) {
+    return connections
+      .filter((c) => {
+        if (selectedProvider !== "all" && c.provider !== selectedProvider) {
           return false
         }
-      }
 
-      return true
-    }).sort((a, b) => {
-      if (sortBy === "priority") {
-        return (a.priority || 0) - (b.priority || 0)
-      }
-      if (sortBy === "provider") {
-        return a.provider.localeCompare(b.provider)
-      }
-      return (a.name || a.email || "").localeCompare(b.name || b.email || "")
-    })
+        if (statusFilter === "active" && !c.isActive) return false
+        if (statusFilter === "inactive" && c.isActive) return false
+        if (statusFilter === "cooldown" && !isConnectionInCooldown(c)) return false
+        if (statusFilter === "issues" && !isConnectionError(c)) return false
+
+        if (search.trim()) {
+          const q = search.toLowerCase()
+          const matchName = (c.name || "").toLowerCase().includes(q)
+          const matchEmail = (c.email || "").toLowerCase().includes(q)
+          const matchProvider = (c.provider || "").toLowerCase().includes(q)
+          const matchId = (c.id || "").toLowerCase().includes(q)
+          const matchDisplayName = (c.displayName || "").toLowerCase().includes(q)
+          if (!matchName && !matchEmail && !matchProvider && !matchId && !matchDisplayName) {
+            return false
+          }
+        }
+
+        return true
+      })
+      .sort((a, b) => {
+        if (sortBy === "priority") {
+          return (a.priority || 0) - (b.priority || 0)
+        }
+        if (sortBy === "provider") {
+          return a.provider.localeCompare(b.provider)
+        }
+        return (a.name || a.email || "").localeCompare(b.name || b.email || "")
+      })
   }, [connections, selectedProvider, statusFilter, search, sortBy])
 
   const handleToggle = async (c: Connection) => {
@@ -90,14 +93,6 @@ export const ConnectionTable: React.FC<ConnectionTableProps> = ({
     } finally {
       setTogglingId(null)
     }
-  }
-
-  const maskEmail = (str?: string) => {
-    if (!str) return "-"
-    if (!str.includes("@")) return str
-    const [user, domain] = str.split("@")
-    if (user.length <= 3) return `${user}***@${domain}`
-    return `${user.slice(0, 3)}***@${domain}`
   }
 
   return (
@@ -151,6 +146,7 @@ export const ConnectionTable: React.FC<ConnectionTableProps> = ({
             <option value="all">Semua Status</option>
             <option value="active">Aktif Saja</option>
             <option value="inactive">Nonaktif</option>
+            <option value="cooldown">⏱ Cooldown</option>
             <option value="issues">Isu / Error</option>
           </select>
 
@@ -188,14 +184,12 @@ export const ConnectionTable: React.FC<ConnectionTableProps> = ({
               </tr>
             ) : (
               filteredConnections.map((c) => {
-                const hasError = c.testStatus === "error" || c.lastError || (c.errorCode && c.errorCode >= 400)
+                const inCooldown = isConnectionInCooldown(c)
+                const hasError = isConnectionError(c)
                 const isToggling = togglingId === c.id
 
                 return (
-                  <tr
-                    key={c.id}
-                    className="hover:bg-[#18181b] transition-colors group"
-                  >
+                  <tr key={c.id} className="hover:bg-[#18181b] transition-colors group">
                     <td className="py-2.5 px-3 text-center">
                       <button
                         onClick={() => handleToggle(c)}
@@ -215,17 +209,17 @@ export const ConnectionTable: React.FC<ConnectionTableProps> = ({
 
                     <td className="py-2.5 px-3 font-mono font-medium text-white">
                       <span className="inline-flex items-center gap-1.5 rounded bg-[#18181b] border border-[#27272a] px-2 py-0.5 text-[11px] text-white">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-                        {c.provider}
+                        <ProviderIcon provider={c.provider} className="h-3.5 w-3.5 shrink-0" />
+                        <span>{c.provider}</span>
                       </span>
                     </td>
 
                     <td className="py-2.5 px-3">
                       <div className="font-medium text-white truncate max-w-xs">
-                        {c.displayName || c.name || maskEmail(c.email)}
+                        {c.displayName || c.name || maskIdentity(c.email)}
                       </div>
                       <div className="text-[11px] font-mono text-[#71717a] truncate max-w-xs">
-                        {c.email ? maskEmail(c.email) : c.id.slice(0, 8)}
+                        {maskIdentity(c.email, c.name)} • ID: {c.id.slice(0, 8)}
                       </div>
                     </td>
 
@@ -238,11 +232,19 @@ export const ConnectionTable: React.FC<ConnectionTableProps> = ({
                     <td className="py-2.5 px-3 font-mono text-[11px]">
                       {!c.isActive ? (
                         <span className="text-[#71717a]">Nonaktif</span>
-                      ) : hasError ? (
+                      ) : inCooldown ? (
                         <div className="flex items-center gap-1.5 text-amber-400">
+                          <Clock className="h-3 w-3 shrink-0" />
+                          <span className="truncate max-w-[200px]" title={c.lastError || "Rate limited / cooldown"}>
+                            ⏱ Cooldown
+                          </span>
+                        </div>
+                      ) : hasError ? (
+                        <div className="flex items-center gap-1.5 text-rose-400">
                           <AlertTriangle className="h-3 w-3 shrink-0" />
                           <span className="truncate max-w-[200px]" title={c.lastError || "Error"}>
-                            {c.errorCode ? `[${c.errorCode}] ` : ""}{c.lastError || "Isu Kunci"}
+                            {c.errorCode ? `[${c.errorCode}] ` : ""}
+                            {c.lastError || "Isu Kunci"}
                           </span>
                         </div>
                       ) : (
@@ -254,7 +256,7 @@ export const ConnectionTable: React.FC<ConnectionTableProps> = ({
                     </td>
 
                     <td className="py-2.5 px-3 text-[#71717a] font-mono text-[11px] hidden lg:table-cell">
-                      {c.lastUsedAt ? new Date(c.lastUsedAt).toLocaleDateString() : "Belum terpakai"}
+                      {formatTimeAgo(c.lastUsedAt)}
                     </td>
 
                     <td className="py-2.5 px-3 text-right">

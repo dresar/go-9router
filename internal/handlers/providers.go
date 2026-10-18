@@ -914,6 +914,13 @@ func safeConnection(c repos.Connection) map[string]any {
 		"proxyPoolId": c.ProxyPoolID,
 		"apiKey":      c.APIKey,
 	}
+	if c.Data != nil {
+		for k, v := range c.Data {
+			if strings.HasPrefix(k, "modelLock_") || k == "rateLimitedUntil" || k == "backoffLevel" {
+				m[k] = v
+			}
+		}
+	}
 	if c.ProviderSpecificData != nil {
 		psd := map[string]any{}
 		for k, v := range c.ProviderSpecificData {

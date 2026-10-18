@@ -2,6 +2,7 @@ import React from "react"
 import { Header } from "./components/Header"
 import { ProviderOverviewGrid } from "./components/ProviderOverviewGrid"
 import { ConnectionTable } from "./components/ConnectionTable"
+import { ProviderGroupDrawer } from "./components/ProviderGroupDrawer"
 import { ProviderDrawer } from "./components/ProviderDrawer"
 import { ModelsAndCombosView } from "./components/ModelsAndCombosView"
 import { SetupAndEndpointsView } from "./components/SetupAndEndpointsView"
@@ -25,6 +26,7 @@ export const App: React.FC = () => {
   const [authenticated, setAuthenticated] = React.useState(false)
   const [loginModalOpen, setLoginModalOpen] = React.useState(false)
 
+  const [selectedProviderGroup, setSelectedProviderGroup] = React.useState<string | null>(null)
   const [selectedConnection, setSelectedConnection] = React.useState<Connection | null>(null)
   const [providerFilter, setProviderFilter] = React.useState("all")
   const [playgroundModel, setPlaygroundModel] = React.useState("HERMES")
@@ -123,6 +125,23 @@ export const App: React.FC = () => {
     }
   }
 
+  const handleToggleProviderGlobal = async (provider: string, nextState: boolean) => {
+    const targetConnections = connections.filter((c) => c.provider === provider)
+    const targetIds = targetConnections.map((c) => c.id)
+    const prevConnections = [...connections]
+
+    setConnections((prev) =>
+      prev.map((c) => (c.provider === provider ? { ...c, isActive: nextState } : c))
+    )
+
+    try {
+      await api.updateProviderBatchStatus(targetIds, nextState)
+    } catch (err: any) {
+      setConnections(prevConnections)
+      alert(`Gagal mengubah status grup provider: ${err?.message || "Kesalahan server"}`)
+    }
+  }
+
   const handleLogin = async (password: string): Promise<boolean> => {
     const success = await api.login(password)
     if (success) {
@@ -143,6 +162,10 @@ export const App: React.FC = () => {
   }
 
   const handleSelectProviderFromOverview = (provider: string) => {
+    setSelectedProviderGroup(provider)
+  }
+
+  const handleOpenProviderInTable = (provider: string) => {
     setProviderFilter(provider)
     setActiveTab("connections")
   }
@@ -198,6 +221,7 @@ export const App: React.FC = () => {
               <ProviderOverviewGrid
                 connections={connections}
                 onSelectProvider={handleSelectProviderFromOverview}
+                onToggleProviderGlobal={handleToggleProviderGlobal}
               />
             )}
 
@@ -242,9 +266,21 @@ export const App: React.FC = () => {
       <footer className="border-t border-[#27272a] bg-[#0c0a09] py-4 text-center text-xs font-mono text-[#71717a]">
         <div className="mx-auto max-w-7xl px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>Go 9Router • High Performance AI Gateway</span>
-          <span>189 Provider Terdaftar • 108 Aktif • 94 Model</span>
+          <span>
+            {connections.length} Provider Terdaftar • {activeCount} Aktif • {models.length} Model
+          </span>
         </div>
       </footer>
+
+      <ProviderGroupDrawer
+        provider={selectedProviderGroup}
+        connections={connections}
+        onClose={() => setSelectedProviderGroup(null)}
+        onToggleConnection={handleToggleConnection}
+        onToggleProviderGlobal={handleToggleProviderGlobal}
+        onOpenInTable={handleOpenProviderInTable}
+        onSelectSingleConnection={(c) => setSelectedConnection(c)}
+      />
 
       <ProviderDrawer
         connection={selectedConnection}

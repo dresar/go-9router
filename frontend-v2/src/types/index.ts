@@ -16,7 +16,10 @@ export interface Connection {
   lastUsedAt?: string
   proxyPoolId?: string
   apiKey?: string
+  rateLimitedUntil?: string
+  backoffLevel?: number
   providerSpecificData?: Record<string, any>
+  [key: string]: any
 }
 
 export interface ModelItem {
