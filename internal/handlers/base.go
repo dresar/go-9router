@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/dresar/go-9router/internal/config"
 )
@@ -47,11 +48,10 @@ func MethodRouter(handlers map[string]http.HandlerFunc) http.HandlerFunc {
 
 func pathSegment(r *http.Request, after string) string {
 	path := r.URL.Path
-	idx := len(after)
-	if idx >= len(path) {
+	if !strings.HasPrefix(path, after) {
 		return ""
 	}
-	seg := path[idx:]
+	seg := strings.TrimPrefix(path, after)
 	if len(seg) > 0 && seg[0] == '/' {
 		seg = seg[1:]
 	}

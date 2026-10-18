@@ -31,6 +31,9 @@ func (h *Handler) HandleProviders(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) HandleProviderByID(w http.ResponseWriter, r *http.Request) {
 	id := pathSegment(r, "/api/providers/")
 	if id == "" {
+		id = pathSegment(r, "/api/connections/")
+	}
+	if id == "" {
 		h.JSONError(w, http.StatusBadRequest, "missing id")
 		return
 	}

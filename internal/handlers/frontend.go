@@ -90,6 +90,7 @@ func (h *Handler) HandleFrontend(w http.ResponseWriter, r *http.Request) {
 
 	// 2. Direct high-speed serving for public assets (i18n, icons, favicon, manifest, etc.)
 	for _, dir := range []string{
+		filepath.Join("frontend-v2", "dist"),
 		filepath.Join("frontend", "public"),
 		filepath.Join("frontend", ".next", "standalone", "public"),
 		"public",
@@ -107,6 +108,15 @@ func (h *Handler) HandleFrontend(w http.ResponseWriter, r *http.Request) {
 		indexPath := filepath.Join(filePath, "index.html")
 		if fi, err := os.Stat(indexPath); err == nil && !fi.IsDir() {
 			http.ServeFile(w, r, indexPath)
+			return
+		}
+	}
+
+	// 2b. SPA fallback for frontend-v2
+	v2Index := filepath.Join("frontend-v2", "dist", "index.html")
+	if fi, err := os.Stat(v2Index); err == nil && !fi.IsDir() {
+		if !strings.HasPrefix(r.URL.Path, "/api/") && !strings.HasPrefix(r.URL.Path, "/v1/") {
+			http.ServeFile(w, r, v2Index)
 			return
 		}
 	}
